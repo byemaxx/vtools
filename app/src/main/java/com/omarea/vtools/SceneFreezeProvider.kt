@@ -58,15 +58,12 @@ class SceneFreezeProvider : ContentProvider() {
 
     // 解冻
     override fun insert(uri: Uri, values: ContentValues?): Uri? {
-        if (values != null && values.containsKey("packageName") && values.containsKey("source")) {
-            val packageName = values.get("packageName").toString()
-            val source = values.get("source").toString()
-            if (whiteList.contains(source) || allowXposedOpen()) {
-                SceneMode.unfreezeApp(packageName)
-            }
-            return uri;
-        }
-        return null
+        val packageName = values?.getAsString("packageName") ?: return null
+        val source = values.getAsString("source") ?: return null
+        val callers = context?.packageManager?.getPackagesForUid(android.os.Binder.getCallingUid())
+        if (!FreezeCallerPolicy.allows(packageName, source, callers, whiteList, allowXposedOpen())) return null
+        SceneMode.unfreezeApp(packageName)
+        return uri
     }
 
     override fun onCreate(): Boolean {

@@ -24,8 +24,13 @@ class SceneTaskIntentService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         serviceScope.launch {
-            handleIntent(intent)
-            stopSelfResult(startId)
+            try {
+                handleIntent(intent)
+            } catch (error: Exception) {
+                android.util.Log.e("SceneTask", "Task execution failed", error)
+            } finally {
+                stopSelfResult(startId)
+            }
         }
         return START_NOT_STICKY
     }
@@ -50,12 +55,12 @@ class SceneTaskIntentService : Service() {
         val context = this
         val timingTask = TimingTaskStorage(context).load(taskId)
         timingTask?.run {
-            if (timingTask.expireDate > 0 && timingTask.expireDate <= System.currentTimeMillis()) {
-                this.enabled = false
-                TimingTaskManager(this@SceneTaskIntentService).setTask(this)
-            } else {
-                TimingTaskManager(this@SceneTaskIntentService).setTask(this)
+            if (!TaskExecutionPolicy.canExecute(enabled, expireDate, System.currentTimeMillis())) {
+                enabled = false
+                TimingTaskManager(context).setTaskAndSave(this)
+                return
             }
+            TimingTaskManager(context).setTask(this)
 
             if (chargeOnly && GlobalStatus.batteryStatus == BatteryManager.BATTERY_STATUS_DISCHARGING) {
                 Toast.makeText(context, "Not in charging state, skip timing task", Toast.LENGTH_LONG).show()

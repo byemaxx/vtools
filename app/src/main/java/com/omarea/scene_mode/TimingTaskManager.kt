@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.SystemClock
-import com.omarea.library.calculator.GetUpTime
 import com.omarea.model.TimingTaskInfo
 import com.omarea.store.TimingTaskStorage
 
@@ -20,24 +19,30 @@ public class TimingTaskManager(private var context: Context) {
         taskIntent.putExtra("taskId", taskId)
         taskIntent.action = taskId
         taskIntent.setAction(taskId)
-        val pendingIntent = PendingIntent.getService(context, 0, taskIntent, PendingIntent.FLAG_UPDATE_CURRENT)
+        val pendingIntent = PendingIntent.getService(context, 0, taskIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return pendingIntent
     }
 
     public fun setTaskAndSave(timingTaskInfo: TimingTaskInfo) {
-        TimingTaskStorage(context).save(timingTaskInfo)
-
-        val taskId = timingTaskInfo.taskId
-
+        if (!TaskExecutionPolicy.canExecute(timingTaskInfo.enabled, timingTaskInfo.expireDate, System.currentTimeMillis())) {
+            timingTaskInfo.enabled = false
+        }
+        if (!TimingTaskStorage(context).save(timingTaskInfo)) throw java.io.IOException("Unable to save task")
         setTask(timingTaskInfo)
-
-        taskListConfig.edit().putBoolean(taskId, timingTaskInfo.enabled).apply()
+        taskListConfig.edit().putBoolean(timingTaskInfo.taskId, timingTaskInfo.enabled).apply()
     }
+
+    fun canScheduleExactAlarms(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
 
     public fun setTask(timingTaskInfo: TimingTaskInfo) {
         // 如果任务启用了，立即添加到队列
-        if (timingTaskInfo.enabled && (timingTaskInfo.expireDate < 1 || timingTaskInfo.expireDate > System.currentTimeMillis())) {
-            val delay = GetUpTime(timingTaskInfo.triggerTimeMinutes).minutes.toLong() * 60 * 1000 // 下次执行
+        if (TaskExecutionPolicy.canExecute(timingTaskInfo.enabled, timingTaskInfo.expireDate, System.currentTimeMillis())) {
+            if (!canScheduleExactAlarms()) {
+                cancelTask(timingTaskInfo)
+                return
+            }
+            val now = System.currentTimeMillis()
+            val delay = TaskExecutionPolicy.nextTrigger(timingTaskInfo.triggerTimeMinutes, now) - now
 
             val pendingIntent = getPendingIntent(timingTaskInfo)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -54,7 +59,12 @@ public class TimingTaskManager(private var context: Context) {
     public fun updateAlarmManager() {
         val tasks = listTask()
         tasks.forEach {
-            setTask(it)
+            try {
+                setTask(it)
+            } catch (error: SecurityException) {
+                android.util.Log.w("SceneTask", "Exact alarm permission revoked", error)
+                cancelTask(it)
+            }
         }
     }
 

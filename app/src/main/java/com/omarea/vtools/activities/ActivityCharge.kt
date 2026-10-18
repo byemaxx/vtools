@@ -25,11 +25,15 @@ import com.omarea.vtools.dialogs.DialogElectricityUnit
 import com.omarea.vtools.databinding.ActivityChargeBinding
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import java.util.*
 
 class ActivityCharge : ActivityBase() {
+    private val pageScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private lateinit var telemetry: TelemetryStore
     private var chartDisposed = false
     private var timer: Timer? = null
@@ -54,8 +58,8 @@ class ActivityCharge : ActivityBase() {
             val intent = Intent(context, ActivityPowerUtilization::class.java)
             startActivity(intent)
         }
-        GlobalScope.launch(Dispatchers.Main) {
-            if (BatteryUtils().qcSettingSupport() || batteryUtils.bpSettingSupport()) {
+        pageScope.launch {
+            if (withContext(Dispatchers.IO) { BatteryUtils().qcSettingSupport() || batteryUtils.bpSettingSupport() }) {
                 binding.chargeController.visibility = View.VISIBLE
                 binding.chargeController.setOnClickListener {
                     val intent = Intent(context, ActivityChargeController::class.java)
@@ -84,6 +88,8 @@ class ActivityCharge : ActivityBase() {
     }
 
     override fun onDestroy() {
+        pageScope.cancel()
+        hander.removeCallbacksAndMessages(null)
         synchronized(telemetry) { chartDisposed = true; telemetry.close() }
         super.onDestroy()
     }

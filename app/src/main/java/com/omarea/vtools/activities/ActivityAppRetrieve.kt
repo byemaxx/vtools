@@ -24,7 +24,11 @@ import com.omarea.ui.AdapterAppList
 import com.omarea.vtools.R
 import com.omarea.vtools.databinding.ActivityAppRetrieveBinding
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import java.lang.ref.WeakReference
 
@@ -34,9 +38,14 @@ class ActivityAppRetrieve : ActivityBase() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var pm: PackageManager
     private val keepShell = KeepShell()
+    private val pageScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private var loadJob: Job? = null
     private lateinit var binding: ActivityAppRetrieveBinding
 
     override fun onDestroy() {
+        pageScope.cancel()
+        handler.removeCallbacksAndMessages(null)
+        progressBarDialog.hideDialog()
         keepShell.tryExit()
         super.onDestroy()
     }
@@ -73,13 +82,19 @@ class ActivityAppRetrieve : ActivityBase() {
     private fun loadData() {
         progressBarDialog.showDialog("Fetching app status")
 
-        GlobalScope.launch(Dispatchers.Main) {
-            // 获得已卸载的应用（包括：隐藏的、卸载的）
-            val uninstalledApp = UninstalledApp().getUninstalledApp(context)
-            val appList = ArrayList<AppInfo>()
-            uninstalledApp.forEach {
-                // spf.edit().putString(it.packageName, it.loadLabel(pm).toString())
-                appList.add(getAppInfo(it))
+        loadJob?.cancel()
+        loadJob = pageScope.launch {
+            val appList = try {
+                withContext(Dispatchers.IO) {
+                    ArrayList(UninstalledApp().getUninstalledApp(applicationContext).map { getAppInfo(it) })
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.e("Scene", "Unable to load applications", error)
+                progressBarDialog.hideDialog()
+                android.widget.Toast.makeText(this@ActivityAppRetrieve, R.string.app_list_load_failed, android.widget.Toast.LENGTH_LONG).show()
+                return@launch
             }
             progressBarDialog.hideDialog()
             val adapterObj = AdapterAppList(context, appList)
@@ -102,7 +117,7 @@ class ActivityAppRetrieve : ActivityBase() {
                     }
                 }
             }
-        }.start()
+        }
     }
 
     override fun onResume() {
@@ -112,7 +127,7 @@ class ActivityAppRetrieve : ActivityBase() {
 
     private fun onConfirm() {
         // 获取选中项
-        val items = adapterAppList?.get()!!.getSelectedItems()
+        val items = adapterAppList?.get()?.getSelectedItems() ?: return
         if (items.size > 0) {
             val cmds = StringBuilder()
             for (app in items) {
@@ -138,6 +153,7 @@ class ActivityAppRetrieve : ActivityBase() {
                 }
 
                 handler.post {
+                    if (isFinishing || isDestroyed) return@post
                     progressBarDialog.hideDialog()
                     if (fail.size > 0) {
                         val msg = StringBuilder()

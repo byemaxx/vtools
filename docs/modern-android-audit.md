@@ -52,3 +52,18 @@
 - [系统栏、刘海和边到边布局](https://developer.android.com/develop/ui/views/layout/edge-to-edge)
 - [Android 12：PendingIntent 可变性与精准闹钟权限](https://developer.android.com/about/versions/12/behavior-changes-12)
 - [WebView 原生桥接的信任边界](https://developer.android.com/privacy-and-security/risks/insecure-webview-native-bridges)
+
+
+## 后续修复（2026-10-18）
+
+- 定时任务入口拒绝禁用或过期数据，持久化禁用状态后返回；服务不再导出，退出放在 finally。
+- PendingIntent 使用 IMMUTABLE；增加精准闹钟权限与设置入口。未授权不降级为不准时的任务；授权后需回到编辑页再次保存。权限恢复后已有任务需重新保存／重新进入应用调度流程。
+- 触发时刻归零秒和毫秒，当前分钟已到则排到次日，避免零延迟重复调度。新建单次任务允许计划时刻后一分钟的投递窗口；更晚则按过期拒绝。未改变旧任务序列化模型，原有过期记录仍按原时间拒绝。
+- 解冻 Provider 将 source 与 Binder UID 对应的包列表匹配，再检查白名单或用户 Xposed 开关；拒绝包含 shell 元字符的目标包名。拒绝返回 null，修正旧接口假成功。
+- 网页 root 检查及同步／异步执行都需逐次原生确认，显示完整脚本和环境参数；取消、超时、页面跳转拒绝执行。跳转后停止向新页面回传旧脚本输出，但已授权运行的进程不会被自动终止。回调仅接受点分隔 JS 标识符；关闭 file URL 的跨源读取，资产提取拒绝目录穿越。
+- Android 10 及以上的启动和网页文件选择／下载不再被过时 READ/WRITE 权限阻断；旧版只申请实际需要的读写权限，删除无效的运行时权限请求。
+- 应用恢复列表读取和充电控制能力检测移到后台，绑定页面生命周期；加载中点击恢复不再空指针崩溃。移除自定义命令未实现的 Test runs 按钮。
+
+验证：任务执行／到点重新排队、边界时间及伪造调用者／命令注入目标的 Java 断言通过；遥测 SQLite 回归通过；此前保存的 insets 页面证据断言通过（并非重新实机巡检）。调试构建通过。
+
+仍需后续逐页验证：在线插件授权弹窗与正常脚本交互、精准闹钟完整系统授权／实际投递、所有 SAF content URI 到旧绝对路径工具的适配、其他 GlobalScope 页面、大字体／横屏／深色模式。未执行关机、刷写、自定义 root 命令或改变系统设置来测试。

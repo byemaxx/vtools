@@ -63,4 +63,6 @@
     <string formatted="false" name="kr_sdk_discrepancy_message">This function only works on systems with SDK%d</string>
     <string name="picker_not_item">No option available at this time!</string>
     <string name="picker_select_none">None checked!</string>
+    <string name="kr_root_request_title">Allow this root request?</string>
+    <string name="kr_root_request_message">A web page or embedded frame requests administrator access. Review the complete command below. Approve only a request you intended to run.</string>
 </resources>

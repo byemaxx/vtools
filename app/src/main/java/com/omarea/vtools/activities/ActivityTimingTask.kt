@@ -205,8 +205,18 @@ class ActivityTimingTask : ActivityBase() {
 
     // 保存并关闭界面
     private fun saveConfigAndFinish() {
+        if (binding.systemSceneTaskEnable.isChecked && !TimingTaskManager(this).canScheduleExactAlarms()) {
+            android.app.AlertDialog.Builder(this)
+                .setMessage(R.string.task_exact_alarm_required)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    startActivity(android.content.Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                        android.net.Uri.parse("package:$packageName")))
+                }.show()
+            return
+        }
         timingTaskInfo.enabled = binding.systemSceneTaskEnable.isChecked
-        timingTaskInfo.expireDate = if (binding.taksRepeat.isChecked) 0 else (GetUpTime(timingTaskInfo.triggerTimeMinutes).nextGetUpTime)
+        timingTaskInfo.expireDate = if (binding.taksRepeat.isChecked) 0 else (com.omarea.scene_mode.TaskExecutionPolicy.nextTrigger(timingTaskInfo.triggerTimeMinutes, System.currentTimeMillis()) + 60_000)
         timingTaskInfo.afterScreenOff = binding.taskAfterScreenOff.isChecked
         timingTaskInfo.beforeExecuteConfirm = binding.taskBeforeExecuteConfirm.isChecked
         timingTaskInfo.chargeOnly = binding.taskChargeOnly.isChecked
@@ -219,7 +229,15 @@ class ActivityTimingTask : ActivityBase() {
         }
         // timingTaskInfo.taskId = taskId
 
-        TimingTaskManager(this).setTaskAndSave(timingTaskInfo)
+        try {
+            TimingTaskManager(this).setTaskAndSave(timingTaskInfo)
+        } catch (error: java.io.IOException) {
+            android.widget.Toast.makeText(this, R.string.task_save_failed, android.widget.Toast.LENGTH_LONG).show()
+            return
+        } catch (error: SecurityException) {
+            android.widget.Toast.makeText(this, R.string.task_exact_alarm_required, android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
 
         finish()
     }

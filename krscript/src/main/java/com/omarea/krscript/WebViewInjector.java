@@ -40,26 +40,37 @@ import java.util.Iterator;
 import java.util.UUID;
 
 public class WebViewInjector {
+    private static final java.util.Map<WebView, java.util.concurrent.atomic.AtomicInteger> documents = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+    private final java.util.concurrent.atomic.AtomicInteger document = new java.util.concurrent.atomic.AtomicInteger();
+
+    public static void onNavigation(WebView view) {
+        java.util.concurrent.atomic.AtomicInteger generation = documents.get(view);
+        if (generation != null) generation.incrementAndGet();
+    }
+
     private WebView webView;
     private Context context;
+    private Activity activity;
     private ParamsFileChooserRender.FileChooserInterface fileChooser;
 
     @SuppressLint("SetJavaScriptEnabled")
     public WebViewInjector(WebView webView, ParamsFileChooserRender.FileChooserInterface fileChooser) {
         this.webView = webView;
+        documents.put(webView, document);
         this.context = webView.getContext();
         this.fileChooser = fileChooser;
     }
 
     @SuppressLint({"JavascriptInterface", "SetJavaScriptEnabled"})
     public void inject(final Activity activity, final boolean credible) {
+        this.activity = activity;
         if (webView != null) {
 
             WebSettings webSettings = webView.getSettings();
             webSettings.setJavaScriptEnabled(true);
             webSettings.setAllowFileAccess(credible);
-            webSettings.setAllowUniversalAccessFromFileURLs(credible);
-            webSettings.setAllowFileAccessFromFileURLs(credible);
+            webSettings.setAllowUniversalAccessFromFileURLs(false);
+            webSettings.setAllowFileAccessFromFileURLs(false);
             webSettings.setAllowContentAccess(true);
             webSettings.setUseWideViewPort(true);
 
@@ -71,8 +82,8 @@ public class WebViewInjector {
                 @Override
                 public void onDownloadStart(final String url, String userAgent, final String contentDisposition, final String mimetype, long contentLength) {
                     if (
-                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
-                                    context.checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
+                                    context.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                         activity.requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE}, 2);
                         Toast.makeText(context, R.string.kr_write_external_storage, Toast.LENGTH_LONG).show();
                     } else {
@@ -96,6 +107,45 @@ public class WebViewInjector {
         }
     }
 
+    private static boolean validCallback(String callback) {
+        return callback != null && callback.matches("[A-Za-z_$][A-Za-z0-9_$]*(\\.[A-Za-z_$][A-Za-z0-9_$]*)*");
+    }
+
+    // Javascript interfaces also receive requests from embedded frames: never grant a whole page root access.
+    private boolean confirmScript(String script) {
+        final int requestedDocument = document.get();
+        java.util.concurrent.CountDownLatch answered = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicBoolean allowed = new java.util.concurrent.atomic.AtomicBoolean(false);
+        java.util.concurrent.atomic.AtomicReference<AlertDialog> dialogRef = new java.util.concurrent.atomic.AtomicReference<>();
+        activity.runOnUiThread(() -> {
+            if (activity.isFinishing() || activity.isDestroyed() || requestedDocument != document.get()) {
+                answered.countDown();
+                return;
+            }
+            AlertDialog dialog = new AlertDialog.Builder(activity)
+                .setTitle(R.string.kr_root_request_title)
+                .setMessage(activity.getString(R.string.kr_root_request_message) + "\n\n" + webView.getUrl() + "\n\n" + script)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(android.R.string.ok, (ignored, which) -> allowed.set(true))
+                .create();
+            dialog.setOnDismissListener(ignored -> answered.countDown());
+            dialogRef.set(dialog);
+            dialog.show();
+        });
+        try {
+            if (!answered.await(60, java.util.concurrent.TimeUnit.SECONDS)) return false;
+            return allowed.get() && requestedDocument == document.get() && !activity.isFinishing() && !activity.isDestroyed();
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            return false;
+        } finally {
+            activity.runOnUiThread(() -> {
+                AlertDialog dialog = dialogRef.get();
+                if (dialog != null) dialog.dismiss();
+            });
+        }
+    }
+
     private class KrScriptEngine {
         private final Context context;
         private final NodeInfoBase virtualRootNode = new NodeInfoBase("");
@@ -111,7 +161,7 @@ public class WebViewInjector {
          */
         @JavascriptInterface
         public boolean rootCheck() {
-            return KeepShellPublic.INSTANCE.checkRoot();
+            return confirmScript("Check root access (su)") && KeepShellPublic.INSTANCE.checkRoot();
         }
 
         /**
@@ -122,7 +172,7 @@ public class WebViewInjector {
          */
         @JavascriptInterface
         public String executeShell(String script) {
-            if (script != null && !script.isEmpty()) {
+            if (script != null && !script.isEmpty() && confirmScript(script)) {
                 return ScriptEnvironmen.executeResultRoot(context, script, virtualRootNode);
             }
             return "";
@@ -134,6 +184,7 @@ public class WebViewInjector {
          */
         @JavascriptInterface
         public boolean executeShellAsync(String script, String callbackFunction, String env) {
+            if (script == null || script.isEmpty() || !validCallback(callbackFunction) || !confirmScript(script + "\n\nEnvironment:\n" + env)) return false;
             HashMap<String, String> params = new HashMap<>();
             Process process = null;
             try {
@@ -174,11 +225,14 @@ public class WebViewInjector {
          */
         @JavascriptInterface
         public String extractAssets(String assets) {
+            if (assets == null || assets.contains("..") || assets.contains("\\") || assets.startsWith("/")) return null;
             return new ExtractAssets(context).extractResource(assets);
         }
 
         @JavascriptInterface
         public boolean fileChooser(final String callbackFunction) {
+            final int requestedDocument = document.get();
+            if (!validCallback(callbackFunction)) return false;
             if (fileChooser != null) {
                 return fileChooser.openFileChooser(new ParamsFileChooserRender.FileSelectedInterface() {
                     @Override
@@ -210,6 +264,7 @@ public class WebViewInjector {
                             webView.post(new Runnable() {
                                 @Override
                                 public void run() {
+                                    if (requestedDocument != document.get() || activity.isDestroyed()) return;
                                     webView.evaluateJavascript(callbackFunction + "(" + message.toString() + ")", new ValueCallback<String>() {
                                         @Override
                                         public void onReceiveValue(String value) {
@@ -226,6 +281,7 @@ public class WebViewInjector {
         }
 
         private void setHandler(Process process, final String callbackFunction, final Runnable onExit) {
+            final int requestedDocument = document.get();
             final InputStream inputStream = process.getInputStream();
             final InputStream errorStream = process.getErrorStream();
             final Thread reader = new Thread(new Runnable() {
@@ -242,7 +298,8 @@ public class WebViewInjector {
                                 webView.post(new Runnable() {
                                     @Override
                                     public void run() {
-                                        webView.evaluateJavascript(callbackFunction + "(" + message.toString() + ")", new ValueCallback<String>() {
+                                        if (requestedDocument != document.get() || activity.isDestroyed()) return;
+                                    webView.evaluateJavascript(callbackFunction + "(" + message.toString() + ")", new ValueCallback<String>() {
                                             @Override
                                             public void onReceiveValue(String value) {
 
@@ -272,7 +329,8 @@ public class WebViewInjector {
                                 webView.post(new Runnable() {
                                     @Override
                                     public void run() {
-                                        webView.evaluateJavascript(callbackFunction + "(" + message.toString() + ")", new ValueCallback<String>() {
+                                        if (requestedDocument != document.get() || activity.isDestroyed()) return;
+                                    webView.evaluateJavascript(callbackFunction + "(" + message.toString() + ")", new ValueCallback<String>() {
                                             @Override
                                             public void onReceiveValue(String value) {
 
@@ -305,6 +363,7 @@ public class WebViewInjector {
                             webView.post(new Runnable() {
                                 @Override
                                 public void run() {
+                                    if (requestedDocument != document.get() || activity.isDestroyed()) return;
                                     webView.evaluateJavascript(callbackFunction + "(" + message.toString() + ")", new ValueCallback<String>() {
                                         @Override
                                         public void onReceiveValue(String value) {

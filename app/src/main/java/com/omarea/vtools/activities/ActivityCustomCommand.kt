@@ -22,10 +22,6 @@ class ActivityCustomCommand : ActivityBase() {
 
         setBackArrow()
 
-        binding.btnRun.setOnClickListener {
-            runCommand()
-        }
-
         binding.btnConfirm.setOnClickListener {
             val title = binding.commandTitle.text?.toString()
             val script = binding.commandScript.text?.toString()
@@ -37,10 +33,6 @@ class ActivityCustomCommand : ActivityBase() {
                 saveCommand(title, script)
             }
         }
-    }
-
-    private fun runCommand() {
-        Toast.makeText(this, "This feature is not implemented yet!", Toast.LENGTH_SHORT).show()
     }
 
     private fun saveCommand(title: String, script: String, replace: Boolean = false) {
