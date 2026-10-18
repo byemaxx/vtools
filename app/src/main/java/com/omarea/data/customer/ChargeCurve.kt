@@ -7,10 +7,17 @@ import com.omarea.data.GlobalStatus
 import com.omarea.data.IEventReceiver
 import com.omarea.store.ChargeSpeedStore
 import com.omarea.store.SpfConfig
+import com.omarea.store.TelemetryStore
+import android.util.Log
+import com.omarea.Scene
+import com.omarea.utils.BatteryPowerMath
 import java.util.*
 
 class ChargeCurve(context: Context) : IEventReceiver {
     private val storage = ChargeSpeedStore(context)
+    private val telemetry = TelemetryStore(context)
+    private var telemetrySession = 0L
+    private var writeErrorShown = false
     private var timer: Timer? = null
     private var batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
     private var globalSPF = context.getSharedPreferences(SpfConfig.GLOBAL_SPF, Context.MODE_PRIVATE)
@@ -26,7 +33,7 @@ class ChargeCurve(context: Context) : IEventReceiver {
         }
     }
 
-    override fun onReceive(eventType: EventType, data: HashMap<String, Any>?) {
+    @Synchronized override fun onReceive(eventType: EventType, data: HashMap<String, Any>?) {
         when (eventType) {
             EventType.POWER_CONNECTED -> {
                 val last = storage.lastCapacity()
@@ -72,16 +79,24 @@ class ChargeCurve(context: Context) : IEventReceiver {
         }
     }
 
-    private fun saveLog() {
+    @Synchronized private fun saveLog() {
         if (GlobalStatus.batteryStatus == BatteryManager.BATTERY_STATUS_CHARGING) {
             // 电流
-            GlobalStatus.batteryCurrentNow = (
-                batteryManager.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW) /
+            val current = BatteryPowerMath.currentMa(
+                batteryManager.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW),
                 globalSPF.getInt(SpfConfig.GLOBAL_SPF_CURRENT_NOW_UNIT, SpfConfig.GLOBAL_SPF_CURRENT_NOW_UNIT_DEFAULT)
             )
+            GlobalStatus.batteryCurrentNow = if(current.isFinite()) current.toLong() else -1
             // batteryManager.getIntProperty(BatteryManager.BATTERY_HEALTH_OVER_VOLTAGE)
+            runCatching {
+                if (telemetrySession == 0L) telemetrySession = telemetry.start("charge", "Charging")
+                telemetry.record(telemetrySession)
+            }.onFailure {
+                Log.e("ChargeCurve", "Unable to save power sample", it)
+                if (!writeErrorShown) { writeErrorShown = true; Scene.toast("Unable to save charging power history: ${it.message}") }
+            }
 
-            if (Math.abs(GlobalStatus.batteryCurrentNow) > 100) {
+            if (current.isFinite() && Math.abs(GlobalStatus.batteryCurrentNow) > 100) {
                 storage.addHistory(
                         GlobalStatus.batteryCurrentNow,
                         GlobalStatus.batteryCapacity,
@@ -94,6 +109,9 @@ class ChargeCurve(context: Context) : IEventReceiver {
     }
 
     private fun cancelUpdate() {
+        telemetry.end(telemetrySession)
+        telemetrySession = 0L
+        writeErrorShown = false
         timer?.run {
             cancel()
             timer = null

@@ -28,6 +28,8 @@ import com.omarea.library.shell.CpuFrequencyUtils
 import com.omarea.library.shell.CpuLoadUtils
 import com.omarea.library.shell.SurfaceFlingerFpsUtils2
 import com.omarea.library.shell.GpuUtils
+import com.omarea.library.shell.FrameTimeline
+import com.omarea.store.TelemetryStore
 import com.omarea.scene_mode.ModeSwitcher
 import com.omarea.store.FpsWatchStore
 import com.omarea.utils.WindowCompatHelper
@@ -39,8 +41,17 @@ import java.util.*
 public class FloatFpsWatch(private val mContext: Context) {
     private var startMonitorTime = 0L
     private val fpsWatchStore = FpsWatchStore(mContext)
-    private var sessionId = 0L
+    @Volatile private var sessionId = 0L
     private var sessionApp: String? = null
+    private val telemetry = TelemetryStore(mContext)
+    private var telemetrySession = 0L
+    private var frameTimeline = FrameTimeline()
+
+    @Synchronized private fun endRecording() {
+        sessionId = -1
+        telemetry.end(telemetrySession)
+        telemetrySession = 0L
+    }
 
     /**
      * dp转换成px
@@ -123,7 +134,7 @@ public class FloatFpsWatch(private val mContext: Context) {
         override fun onReceive(eventType: EventType, data: HashMap<String, Any>?) {
             if (sessionId > 0) {
                 if ((eventType == EventType.SCREEN_OFF || eventType == EventType.SCREEN_ON) || (GlobalStatus.lastPackageName != sessionApp)) {
-                    sessionId = -1
+                    endRecording()
                     myHandler.post {
                         if (eventType == EventType.SCREEN_OFF) {
                             Toast.makeText(mContext, "The screen display status changes, and the frame rate recording ends", Toast.LENGTH_SHORT).show()
@@ -170,7 +181,7 @@ public class FloatFpsWatch(private val mContext: Context) {
     private var clusters = ArrayList<Array<String>>()
 
     private fun updateInfo() {
-        val fps = fpsUtils.getFps()
+        var fps = fpsUtils.getFps()
         val gpuLoad = GpuUtils.getGpuLoad()
         if (coreCount < 1) {
             coreCount = CpuFrequencyUtils().coreCount
@@ -180,7 +191,7 @@ public class FloatFpsWatch(private val mContext: Context) {
 
         // 尝试获得大核心的最高负载
         val loads = cpu.cpuLoad
-        var cpuLoad = (loads.getValue(-1)?: -1.0).toDouble()
+        var cpuLoad = (loads[-1] ?: -1.0).toDouble()
         // 一般BigLittle架构的处理器，后面几个核心都是大核，游戏主要依赖大核性能。而小核负载一般来源于后台进程，因此不需要分析小核负载
         val centerIndex = coreCount / 2
         var bigCoreLoadMax = 0.0
@@ -208,9 +219,25 @@ public class FloatFpsWatch(private val mContext: Context) {
             cpuLoad = 0.toDouble()
         }
 
-        if (sessionId > 0) {
-            fpsWatchStore.addHistory(
-                sessionId,
+        val recording = synchronized(this) { Triple(sessionId, telemetrySession, sessionApp to frameTimeline) }
+        if (recording.first > 0) {
+            runCatching {
+                val batch = recording.third.second.read(recording.third.first ?: "")
+                if (batch.durations.isNotEmpty()) fps = (1000.0 / batch.durations.average()).toFloat()
+                telemetry.record(recording.second, fps.toDouble(), cpuLoad, gpuLoad.toDouble(),
+                    batch.durations, batch.source, batch.gap, batch.endTimes)
+            }.onFailure {
+                Log.e("FloatFpsWatch", "Unable to save telemetry", it)
+                synchronized(this) { if (sessionId == recording.first) endRecording() }
+                myHandler.post {
+                    if (sessionId <= 0) {
+                        recordBtn?.setImageResource(R.drawable.play)
+                        Toast.makeText(mContext, "Recording stopped: ${it.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+            if (sessionId == recording.first && fps.isFinite()) fpsWatchStore.addHistory(
+                recording.first,
                 fps,
                 cpuLoad,
                 gpuLoad.toDouble(),
@@ -221,7 +248,7 @@ public class FloatFpsWatch(private val mContext: Context) {
         }
 
         myHandler.post {
-            fpsText?.text = if (fps >= 100) fps.toInt().toString() else String.format("%.1f", fps)
+            fpsText?.text = if (!fps.isFinite()) "--" else if (fps >= 100) fps.toInt().toString() else String.format("%.1f", fps)
         }
     }
 
@@ -246,7 +273,7 @@ public class FloatFpsWatch(private val mContext: Context) {
             mView = null
             show = false
         }
-        sessionId = -1
+        endRecording()
         EventBus.unsubscribe(appWatch)
     }
 
@@ -258,14 +285,25 @@ public class FloatFpsWatch(private val mContext: Context) {
         view?.setOnClickListener {
             recordBtn?.run {
                 if (sessionId > 0) {
-                    sessionId = -1
+                    endRecording()
                     setImageResource(R.drawable.play)
                     view?.alpha = 1f
                     Toast.makeText(mContext, "Frame rate recording is over!", Toast.LENGTH_SHORT).show()
                 } else {
                     val app = if (GlobalStatus.lastPackageName.isNullOrEmpty()) "android" else GlobalStatus.lastPackageName
-                    sessionId = fpsWatchStore.createSession(app)
-                    sessionApp = GlobalStatus.lastPackageName
+                    try {
+                        synchronized(this@FloatFpsWatch) {
+                            sessionId = fpsWatchStore.createSession(app)
+                            check(sessionId > 0) { "Unable to create FPS session" }
+                            sessionApp = app
+                            telemetrySession = telemetry.start("game", app)
+                            frameTimeline = FrameTimeline()
+                        }
+                    } catch (error: Exception) {
+                        endRecording()
+                        Toast.makeText(mContext, "Unable to start recording: ${error.message}", Toast.LENGTH_LONG).show()
+                        return@setOnClickListener
+                    }
                     setImageResource(R.drawable.stop)
                     view?.alpha = 0.6f
                     Toast.makeText(mContext, "Frame rate recording starts, please do not use the game toolbox or leave the current application!", Toast.LENGTH_LONG).show()

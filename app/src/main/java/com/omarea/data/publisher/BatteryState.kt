@@ -32,13 +32,7 @@ class BatteryState(private val applicationContext: Context) : BroadcastReceiver(
             val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_UNKNOWN)
             var capacity = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
             val temp = intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1).toDouble() / 10.0f
-            var voltage = intent.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0).toDouble()
-            if (voltage > 1000)
-                voltage /= 1000.0
-            if (voltage > 100)
-                voltage /= 100.0
-            else if (voltage > 10)
-                voltage /= 10.0
+            val voltage = intent.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0) / 1000.0
             if (capacity == -1) {
                 if (batteryManager == null) {
                     batteryManager = context.applicationContext.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
@@ -49,6 +43,7 @@ class BatteryState(private val applicationContext: Context) : BroadcastReceiver(
             GlobalStatus.batteryStatus = status
             GlobalStatus.batteryCapacity = capacity
             GlobalStatus.batteryVoltage = voltage
+            GlobalStatus.batteryCycleCount = intent.getIntExtra(BatteryManager.EXTRA_CYCLE_COUNT, GlobalStatus.batteryCycleCount)
             GlobalStatus.setBatteryTemperature(temp)
 
             // 判断是否在充电

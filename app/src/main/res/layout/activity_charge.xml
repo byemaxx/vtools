@@ -122,13 +122,26 @@
                     style="@style/textTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="battery current/power" />
+                    android:text="@string/charge_power_chart_title" />
 
-                <com.omarea.ui.charge.ChargeCurveView
-                    android:id="@+id/view_speed"
+                <TextView
+                    android:id="@+id/charge_power_summary"
+                    style="@style/textSmall"
                     android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+
+                <com.omarea.ui.TelemetryChart
+                    android:id="@+id/view_power"
+                    android:layout_width="match_parent"
+                    android:contentDescription="@string/charge_power_chart_description"
                     android:layout_height="250dp" />
             </LinearLayout>
+
+            <Button android:id="@+id/power_history" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="Power curve / charging sessions" />
+            <TextView android:id="@+id/battery_details" style="@style/ListCardItem"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:textIsSelectable="true" />
 
             <LinearLayout
                 style="@style/ListCardItem"
@@ -139,7 +152,7 @@
                     style="@style/textTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="battery/time" />
+                    android:text="Charge time / battery level" />
 
                 <com.omarea.ui.charge.ChargeTimeView
                     android:id="@+id/view_time"
@@ -156,7 +169,7 @@
                     style="@style/textTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Temperature/Power" />
+                    android:text="Temperature / battery level" />
 
                 <com.omarea.ui.charge.ChargeTempView
                     android:id="@+id/view_temperature"

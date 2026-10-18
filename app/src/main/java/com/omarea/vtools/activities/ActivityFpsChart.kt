@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
+import android.content.Intent
 import android.text.Spannable
 import android.text.SpannableString
 import android.text.style.ForegroundColorSpan
@@ -44,6 +45,9 @@ class ActivityFpsChart : ActivityBase(), AdapterSessions.OnItemClickListener {
         binding = ActivityFpsChartBinding.inflate(layoutInflater)
         setContentView(binding.root)
         setBackArrow()
+        binding.fpsPowerHistory.setOnClickListener {
+            startActivity(Intent(this, ActivityTelemetry::class.java).putExtra("kind", "game"))
+        }
 
         fpsWatchStore = FpsWatchStore(this)
 

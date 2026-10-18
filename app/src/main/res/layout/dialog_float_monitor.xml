@@ -18,6 +18,11 @@
             android:background="@drawable/krscript_item_ripple_inactive"
             android:orientation="vertical">
 
+            <Button
+                android:id="@+id/monitor_settings"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Monitor settings" />
             <TextView
                 android:id="@+id/confirm_title"
                 android:paddingStart="@dimen/activity_horizontal_margin"

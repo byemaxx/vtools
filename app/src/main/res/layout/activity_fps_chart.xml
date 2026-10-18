@@ -31,6 +31,8 @@
             android:focusable="false"
             android:focusableInTouchMode="true"
             android:orientation="vertical">
+            <Button android:id="@+id/fps_power_history" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="FPS / power / frame times / compare / export" />
             <LinearLayout
                 style="@style/ListCardItem"
                 android:orientation="horizontal"

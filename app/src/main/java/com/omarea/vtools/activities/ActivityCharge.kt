@@ -3,6 +3,7 @@
 package com.omarea.vtools.activities
 
 import android.content.Intent
+import android.content.Context
 import android.os.BatteryManager
 import android.os.Bundle
 import android.os.Handler
@@ -14,7 +15,11 @@ import android.view.View
 import com.omarea.data.GlobalStatus
 import com.omarea.library.device.BatteryCapacity
 import com.omarea.library.shell.BatteryUtils
-import com.omarea.store.ChargeSpeedStore
+import com.omarea.library.shell.BatteryDetails
+import com.omarea.store.TelemetryStore
+import com.omarea.store.SpfConfig
+import com.omarea.utils.BatteryPower
+import com.omarea.utils.TelemetryMath
 import com.omarea.vtools.R
 import com.omarea.vtools.dialogs.DialogElectricityUnit
 import com.omarea.vtools.databinding.ActivityChargeBinding
@@ -25,9 +30,11 @@ import kotlinx.coroutines.launch
 import java.util.*
 
 class ActivityCharge : ActivityBase() {
-    private lateinit var storage: ChargeSpeedStore
+    private lateinit var telemetry: TelemetryStore
+    private var chartDisposed = false
     private var timer: Timer? = null
     private lateinit var binding: ActivityChargeBinding
+    private val batteryDetails = BatteryDetails()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityChargeBinding.inflate(layoutInflater)
@@ -35,7 +42,11 @@ class ActivityCharge : ActivityBase() {
 
         setBackArrow()
 
-        storage = ChargeSpeedStore(this)
+        telemetry = TelemetryStore(this)
+        binding.viewPower.emptyText = getString(R.string.charge_power_empty)
+        binding.powerHistory.setOnClickListener {
+            startActivity(Intent(this, ActivityTelemetry::class.java).putExtra("kind", "charge"))
+        }
         binding.electricityAdjUnit.setOnClickListener {
             DialogElectricityUnit().showDialog(this)
         }
@@ -72,11 +83,10 @@ class ActivityCharge : ActivityBase() {
         super.onPause()
     }
 
-    private val sumInfo: String
-        get() {
-            val sum = storage.sum
-            return getString(R.string.battery_status_sum).format((if (sum > 0) ("" + sum) else (sum.toString())))
-        }
+    override fun onDestroy() {
+        synchronized(telemetry) { chartDisposed = true; telemetry.close() }
+        super.onDestroy()
+    }
 
     private var batteryUtils = BatteryUtils()
     private val hander = Handler(Looper.getMainLooper())
@@ -86,8 +96,25 @@ class ActivityCharge : ActivityBase() {
         val kernelCapacity = batteryUtils.getKernelCapacity(level)
         val batteryMAH = BatteryCapacity().getBatteryCapacity(this).toInt().toString() + "mAh" + "   "
         val voltage = GlobalStatus.batteryVoltage
+        val preferences = getSharedPreferences(SpfConfig.GLOBAL_SPF, Context.MODE_PRIVATE)
+        val rawCurrent = (getSystemService(Context.BATTERY_SERVICE) as BatteryManager)
+            .getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
+        val current = BatteryPower.currentMa(rawCurrent, preferences)
+        val power = BatteryPower.format(rawCurrent, preferences)
+        val details = batteryDetails.read()
+        val samples = synchronized(telemetry) {
+            if (chartDisposed) return
+            telemetry.latestSessionId("charge")?.let { telemetry.samples(it) }.orEmpty()
+        }
+        val energy = TelemetryMath.energy(samples.map { it.elapsed }.toLongArray(), samples.map { it.watts }.toDoubleArray())
+        fun number(value: Double, digits: Int) = if(value.isFinite()) "%.${digits}f".format(value) else "--"
+        val summary = if (samples.isEmpty()) getString(R.string.charge_power_waiting) else
+            getString(R.string.charge_power_summary, number(energy[1], 2), number(energy[0], 3), number(energy[2] / 60000, 1))
+        val powerPoints = samples.map { it.elapsed to it.watts }
         hander.post {
-            binding.viewSpeed.invalidate()
+            if (isDestroyed) return@post
+            binding.viewPower.series = listOf(powerPoints)
+            binding.chargePowerSummary.text = summary
             binding.viewTime.invalidate()
             binding.viewTemperature.invalidate()
 
@@ -108,7 +135,7 @@ class ActivityCharge : ActivityBase() {
                     getString(R.string.battery_status_not_charging)
                 }
                 else -> getString(R.string.battery_status_unknown)
-            }) + sumInfo
+            })
 
             if (kernelCapacity > -1) {
                 val str = "$kernelCapacity%"
@@ -125,16 +152,13 @@ class ActivityCharge : ActivityBase() {
             }
 
             binding.batterySize.text = batteryMAH
+            binding.batteryDetails.text = details
             binding.batteryStatus.text =
                     getString(R.string.battery_temperature) + temp + "°C\n" +
                     getString(R.string.battery_voltage) + voltage + "v\n" +
-                    getString(R.string.battery_electricity) + (
-                        (if (GlobalStatus.batteryCurrentNow > 0) {
-                            "+"
-                        } else {
-                            ""
-                        }) + GlobalStatus.batteryCurrentNow + "mA"
-                    )
+                    getString(R.string.battery_electricity) +
+                    (if (current.isFinite()) "%+.0fmA".format(current) else "--mA") + "\n" +
+                    getString(R.string.battery_power) + power
             binding.batteryCapacityChart.setData(100f, 100f - level, temp.toFloat())
         }
     }

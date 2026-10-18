@@ -72,6 +72,7 @@ import com.omarea.ui.RamBarView
 import com.omarea.vtools.R
 import com.omarea.vtools.activities.*
 import com.omarea.vtools.dialogs.DialogElectricityUnit
+import com.omarea.utils.BatteryPower
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -486,8 +487,9 @@ class FragmentHome : Fragment() {
 
         myHandler.post {
             try {
-                val batteryNow = if (batteryCurrentNow != Long.MIN_VALUE && batteryCurrentNow != Long.MAX_VALUE) {
-                    (batteryCurrentNow / globalSPF.getInt(SpfConfig.GLOBAL_SPF_CURRENT_NOW_UNIT, SpfConfig.GLOBAL_SPF_CURRENT_NOW_UNIT_DEFAULT)).toString() + "mA"
+                val current = BatteryPower.currentMa(batteryCurrentNow, globalSPF)
+                val batteryNow = if (current.isFinite()) {
+                    "%+.0fmA".format(current) + "  " + BatteryPower.format(batteryCurrentNow, globalSPF)
                 } else {
                     "--"
                 }

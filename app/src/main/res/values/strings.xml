@@ -173,6 +173,19 @@
 
     <string name="battery_voltage">Current voltage: </string>
     <string name="battery_electricity">Current: </string>
+    <string name="battery_power">Battery power: </string>
+    <string name="charge_power_chart_title">Charging power (W)</string>
+    <string name="charge_power_chart_description">Battery power in watts over elapsed charging time in minutes</string>
+    <string name="charge_power_empty">No power samples yet</string>
+    <string name="charge_power_waiting">Waiting for new charging samples. Old current-only records cannot provide a power curve.</string>
+    <string name="charge_power_summary">Latest charging session\nAverage %1$s W · Net %2$s Wh · Valid duration %3$s min</string>
+    <string name="battery_power_calibration">Battery power calibration</string>
+    <string-array name="battery_power_factors">
+        <item>×1 — No correction</item>
+        <item>×2 — Cell voltage + series current</item>
+        <item>×0.5 — Pack voltage + equivalent current</item>
+    </string-array>
+    <string name="battery_power_calibration_desc">Power = current × voltage. Use ×2 only when a series dual-cell battery reports one cell voltage and physical series current. Keep ×1 for pack voltage with physical current, or cell voltage with equivalent current. Use ×0.5 for pack voltage with equivalent current. This changes power display only; current history is unchanged. Positive = charging, negative = discharging. Charging shows net battery power, not charger input power.</string>
     <string name="battery_temperature">Current temperature: </string>
     <string name="battery_status_discharging">Not charging</string>
     <string name="battery_status_charging">Charging</string>

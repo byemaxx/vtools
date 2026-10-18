@@ -30,6 +30,8 @@ import com.omarea.store.SpfConfig
 import com.omarea.ui.FloatMonitorBatteryView
 import com.omarea.ui.FloatMonitorChartView
 import com.omarea.utils.WindowCompatHelper
+import com.omarea.utils.BatteryPower
+import com.omarea.utils.MonitorOptions
 import com.omarea.vtools.R
 import java.util.*
 
@@ -267,11 +269,8 @@ class FloatMonitor(private val mContext: Context) {
 
         // 电池电流
         val batteryCurrentNow = batteryManager?.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
-        val batteryCurrentNowMa = if (batteryCurrentNow != null) {
-            (batteryCurrentNow / globalSPF.getInt(SpfConfig.GLOBAL_SPF_CURRENT_NOW_UNIT, SpfConfig.GLOBAL_SPF_CURRENT_NOW_UNIT_DEFAULT))
-        } else {
-            null
-        }
+        val batteryCurrentNowMa = BatteryPower.currentMa(batteryCurrentNow, globalSPF)
+        val batteryPower = BatteryPower.format(batteryCurrentNow, globalSPF)
 
         // GPU内存使用
         val gpuMemoryUsage = GpuUtils.getMemoryUsage()
@@ -286,12 +285,12 @@ class FloatMonitor(private val mContext: Context) {
                 append(whiteBoldSpan(ramInfoText))
                 append("\n")
 
-                if (gpuMemoryUsage != null) {
+                if (gpuMemoryUsage != null && globalSPF.getBoolean("monitor_gpu", true)) {
                     append(whiteBoldSpan("#GMEM " + gpuMemoryUsage))
                     append("\n")
                 }
 
-                for ((clusterIndex, cluster) in clusters.withIndex()) {
+                if (globalSPF.getBoolean("monitor_cpu", true)) for ((clusterIndex, cluster) in clusters.withIndex()) {
                     if (clusterIndex != 0) {
                         append("\n")
                     }
@@ -319,18 +318,19 @@ class FloatMonitor(private val mContext: Context) {
                     }
                 }
 
-                fpsUtils.currentFps?.run {
+                (if (globalSPF.getBoolean("monitor_fps", true)) fpsUtils.currentFps else null)?.run {
                     append("\n")
                     append(whiteBoldSpan("#FPS  $this"))
                 }
 
-                batteryCurrentNowMa?.run {
-                    if (this > -20000 && this < 20000) {
-                        append("\n")
-
-                        val batteryInfo = "#BAT  " + (if (this > 0) ("+" + this) else this) + "mA"
-                        append(whiteBoldSpan(batteryInfo))
+                if (globalSPF.getBoolean("monitor_battery", true)) {
+                    append("\n")
+                    val currentText = if (batteryCurrentNowMa.isFinite()) {
+                        "%+.0fmA".format(batteryCurrentNowMa)
+                    } else {
+                        "--mA"
                     }
+                    append(whiteBoldSpan("#BAT  $currentText\n#PWR  $batteryPower"))
                 }
             }
         }
@@ -370,7 +370,7 @@ class FloatMonitor(private val mContext: Context) {
             override fun run() {
                 updateInfo()
             }
-        }, 0, 1500)
+        }, 0, MonitorOptions.interval(globalSPF))
         // updateInfo()
     }
 
@@ -412,11 +412,13 @@ class FloatMonitor(private val mContext: Context) {
                 otherInfo?.visibility = if (showOtherInfo) View.GONE else View.VISIBLE
                 // it.findViewById<View>(R.id.fw_ram_info).visibility = if (showOtherInfo) View.GONE else View.VISIBLE
                 it.findViewById<LinearLayout>(R.id.fw_chart_list).orientation = if (showOtherInfo) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
-                (mView as LinearLayout).orientation = if (showOtherInfo) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
+                (view as LinearLayout).orientation = if (showOtherInfo) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
                 showOtherInfo = !showOtherInfo
             } catch (ex: Exception) {}
         }
 
+        MonitorOptions.apply(view!!, globalSPF, false)
+        if (globalSPF.getBoolean("monitor_details", false)) view!!.performClick()
         return view!!
     }
 

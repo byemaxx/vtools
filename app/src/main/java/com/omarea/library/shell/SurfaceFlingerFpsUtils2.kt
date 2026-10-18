@@ -27,7 +27,7 @@ class SurfaceFlingerFpsUtils2 {
                     val index = result.indexOf("(") + 1
                     val frames = Integer.parseInt(result.substring(index, index + 8), 16)
                     val time = System.currentTimeMillis()
-                    var fps = 0F
+                    var fps = Float.NaN
                     if (lastTime > 0 && lastFrames > 0) {
                         fps = (frames - lastFrames) * 1000.0f / (time - lastTime)
                     }
@@ -41,7 +41,7 @@ class SurfaceFlingerFpsUtils2 {
                 }
             }
         }
-        return 1f
+        return Float.NaN
     }
 
     private fun readFpsgoStatusFps(): Float? {
@@ -84,9 +84,6 @@ class SurfaceFlingerFpsUtils2 {
             if (fps > bestFps) {
                 bestFps = fps
             }
-        }
-        if (bestFps == 0f) {
-            return 1f
         }
         return if (bestFps >= 0f) bestFps else null
     }

@@ -23,6 +23,8 @@ import com.omarea.data.GlobalStatus
 import com.omarea.library.shell.*
 import com.omarea.store.SpfConfig
 import com.omarea.utils.WindowCompatHelper
+import com.omarea.utils.BatteryPower
+import com.omarea.utils.MonitorOptions
 import com.omarea.vtools.R
 import java.util.*
 
@@ -126,12 +128,7 @@ public class FloatMonitorMini(private val mContext: Context) {
     private val fpsUtils = FpsUtils()
     private var batteryManager: BatteryManager? = null
 
-    private var pollingPhase = 0
-
     private fun updateInfo() {
-        pollingPhase += 1
-        pollingPhase %= 4
-
         if (coreCount < 1) {
             coreCount = cpuFrequencyUtils.coreCount
             clusters = cpuFrequencyUtils.clusterInfo
@@ -171,25 +168,14 @@ public class FloatMonitorMini(private val mContext: Context) {
         }
 
         val fps = fpsUtils.currentFps
-        var batState: String? = null
-
-        if (pollingPhase != 0) {
-            // 电池电流
-            val now = batteryManager?.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
-            val nowMA = if (now != null) {
-                (now / globalSPF.getInt(SpfConfig.GLOBAL_SPF_CURRENT_NOW_UNIT, SpfConfig.GLOBAL_SPF_CURRENT_NOW_UNIT_DEFAULT))
-            } else {
-                null
-            }
-            nowMA?.run {
-                if (this > -20000 && this < 20000) {
-                    batState = "" + (if (this > 0) ("+" + this) else this) + "mA"
-                }
-            }
+        val now = batteryManager?.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
+        val temperature = GlobalStatus.updateBatteryTemperature()
+        val temperatureLabel = if (temperature.isFinite() && temperature != -1.0) {
+            "%.1f°C".format(temperature)
+        } else {
+            "--°C"
         }
-        if (batState == null) {
-            batState = GlobalStatus.updateBatteryTemperature().toString() + "°C"
-        }
+        val batState = "$temperatureLabel ${BatteryPower.format(now, globalSPF)}"
 
         myHandler.post {
             cpuLoadTextView?.text = cpuLoad.toInt().toString() + "%"
@@ -199,7 +185,7 @@ public class FloatMonitorMini(private val mContext: Context) {
                 gpuLoadTextView?.text = "--"
             }
 
-            temperatureText!!.setText(batState!!)
+            temperatureText?.text = batState
             if (fps != null) {
                 fpsText?.text = fps.toString()
             }
@@ -213,7 +199,7 @@ public class FloatMonitorMini(private val mContext: Context) {
             override fun run() {
                 updateInfo()
             }
-        }, 0, 1500)
+        }, 0, MonitorOptions.interval(globalSPF))
     }
 
     /**
@@ -242,6 +228,7 @@ public class FloatMonitorMini(private val mContext: Context) {
         fpsText = view!!.findViewById(R.id.fw_fps)
 
         activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        MonitorOptions.apply(view!!, globalSPF, true)
 
         return view!!
     }

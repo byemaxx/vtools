@@ -4,8 +4,6 @@ def keystorePropsFile = rootProject.file("keystore.properties")
 def keystoreProps = new Properties()
 if (keystorePropsFile.exists()) {
     keystoreProps.load(new FileInputStream(keystorePropsFile))
-} else {
-    throw new GradleException("Missing keystore.properties in project root")
 }
 
 android {
@@ -17,11 +15,13 @@ android {
         compose true
     }
     signingConfigs {
-        omarea_Signing {
-            storeFile rootProject.file(keystoreProps['storeFile'])
-            storePassword keystoreProps['storePassword']
-            keyAlias keystoreProps['keyAlias']
-            keyPassword keystoreProps['keyPassword']
+        if (keystorePropsFile.exists()) {
+            omarea_Signing {
+                storeFile rootProject.file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
         }
     }
     compileSdk 36
@@ -48,7 +48,9 @@ android {
             zipAlignEnabled true
             debuggable false
             jniDebuggable = false
-            signingConfig signingConfigs.omarea_Signing
+            if (keystorePropsFile.exists()) {
+                signingConfig signingConfigs.omarea_Signing
+            }
         }
         release_mini {
             shrinkResources true
@@ -82,7 +84,7 @@ android {
     externalNativeBuild {
         cmake {
             path "src/main/cpp/CMakeLists.txt"
-            version "3.10.2"
+            version "3.22.1"
         }
     }
     ndkVersion '21.0.6113669'
