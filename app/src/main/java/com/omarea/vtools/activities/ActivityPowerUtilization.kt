@@ -25,7 +25,6 @@ import com.omarea.vtools.dialogs.DialogElectricityUnit
 import com.omarea.vtools.databinding.ActivityPowerUtilizationBinding
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import java.util.*
 import kotlin.math.abs
@@ -48,8 +47,8 @@ class ActivityPowerUtilization : ActivityBase() {
             val intent = Intent(context, ActivityCharge::class.java)
             startActivity(intent)
         }
-        GlobalScope.launch(Dispatchers.Main) {
-            if (BatteryUtils().qcSettingSupport() || batteryUtils.bpSettingSupport()) {
+        activityScope.launch(Dispatchers.Main) {
+            if (kotlinx.coroutines.withContext(Dispatchers.IO) { BatteryUtils().qcSettingSupport() || batteryUtils.bpSettingSupport() }) {
                 binding.chargeController.visibility = View.VISIBLE
                 binding.chargeController.setOnClickListener {
                     val intent = Intent(context, ActivityChargeController::class.java)
@@ -71,7 +70,7 @@ class ActivityPowerUtilization : ActivityBase() {
     override fun onResume() {
         super.onResume()
         title = getString(R.string.menu_power_utilization)
-        updateUI()
+        activityScope.launch(Dispatchers.IO) { updateUI() }
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -83,9 +82,11 @@ class ActivityPowerUtilization : ActivityBase() {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.action_delete -> {
-                BatteryHistoryStore(context).clearData()
-                Toast.makeText(context, "Stats cleared", Toast.LENGTH_SHORT).show()
-                updateUI()
+                activityScope.launch {
+                    kotlinx.coroutines.withContext(Dispatchers.IO) { storage.clearData() }
+                    Toast.makeText(context, "Stats cleared", Toast.LENGTH_SHORT).show()
+                    kotlinx.coroutines.withContext(Dispatchers.IO) { updateUI() }
+                }
             }
         }
         return super.onOptionsItemSelected(item)
@@ -104,6 +105,7 @@ class ActivityPowerUtilization : ActivityBase() {
         val sampleTime = 6
 
         handler.post {
+            if (isDestroyed) return@post
             binding.batteryStats.adapter = AdapterBatteryStats(context, (data.filter {
                 // 仅显示运行时间超过2分钟的应用数据，避免误差过大
                 (it.count * sampleTime) > 120
@@ -171,6 +173,7 @@ class ActivityPowerUtilization : ActivityBase() {
         }
 
         handler.post {
+            if (isDestroyed) return@post
             try {
                 binding.batteryMaxOutput.setData(batteryOutputMax.toFloat(), batteryOutputMax - maxOutput.toFloat())
                 binding.batteryMaxOutputText.text = maxOutput.toString() + " mA"

@@ -26,6 +26,7 @@ import com.omarea.vtools.R
 
 class Scene : Application() {
     companion object {
+        val backgroundScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
         private val handler = Handler(Looper.getMainLooper())
         public lateinit var context: Application
         public lateinit var thisPackageName: String

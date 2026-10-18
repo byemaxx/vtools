@@ -2,7 +2,7 @@
   "version": "5.3",
   "versionCode": 20220328001,
   "author": "SCENE5",
-  "project_url": "http://vtools.omarea.com/",
+  "project_url": "https://vtools.omarea.com/",
   "features": {
     "strict": true,
     "pedestal": true

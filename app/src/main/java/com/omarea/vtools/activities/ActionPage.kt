@@ -1,5 +1,7 @@
 package com.omarea.vtools.activities
 
+import kotlinx.coroutines.launch
+
 import android.Manifest
 import android.app.Activity
 import android.content.ComponentName
@@ -42,15 +44,16 @@ class ActionPage : ActivityBase() {
     private var fileSelectedInterface: ParamsFileChooserRender.FileSelectedInterface? = null
 
     private val externalFileChooserLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val resultUri = if (result.resultCode == Activity.RESULT_OK) result.data?.data else null
-        if (fileSelectedInterface != null) {
-            if (resultUri != null) {
-                fileSelectedInterface?.onFileSelected(getPath(resultUri))
-            } else {
-                fileSelectedInterface?.onFileSelected(null)
-            }
-        }
+        val uri = if (result.resultCode == Activity.RESULT_OK) result.data?.data else null
+        val callback = fileSelectedInterface
         fileSelectedInterface = null
+        if (callback != null) activityScope.launch {
+            val path = if (uri == null) null else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                FilePathResolver().getPath(applicationContext, uri)
+            }
+            if (uri != null && path == null) Toast.makeText(this@ActionPage, R.string.document_import_failed, Toast.LENGTH_LONG).show()
+            callback.onFileSelected(path)
+        }
     }
 
     private val innerFileChooserLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -328,44 +331,31 @@ class ActionPage : ActivityBase() {
     }
 
     private fun chooseFilePath(fileSelectedInterface: ParamsFileChooserRender.FileSelectedInterface): Boolean {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), 2)
-            Toast.makeText(this, getString(R.string.kr_write_external_storage), Toast.LENGTH_LONG).show()
-            return false
-        } else {
-            return try {
-                this.fileSelectedInterface = fileSelectedInterface
-                if (fileSelectedInterface.type() == ParamsFileChooserRender.FileSelectedInterface.TYPE_FOLDER) {
-                    chooseFolderPath()
-                } else {
-                    val suffix = fileSelectedInterface.suffix()
-                    if (!suffix.isNullOrEmpty()) {
-                        chooseFilePath(suffix)
-                    } else {
-                        val intent = Intent(Intent.ACTION_GET_CONTENT)
-                        val mimeType = fileSelectedInterface.mimeType()
-                        if (mimeType != null) {
-                            intent.type = mimeType
-                        } else {
-                            intent.type = "*/*"
-                        }
-                        intent.addCategory(Intent.CATEGORY_OPENABLE)
-                        externalFileChooserLauncher.launch(intent)
-                    }
-                }
-                true
-            } catch (ex: java.lang.Exception) {
-                false
-            }
-        }
-    }
-
-    private fun getPath(uri: Uri): String? {
         return try {
-            FilePathResolver().getPath(this, uri)
+            this.fileSelectedInterface = fileSelectedInterface
+            if (fileSelectedInterface.type() == ParamsFileChooserRender.FileSelectedInterface.TYPE_FOLDER) {
+                chooseFolderPath()
+            } else {
+                val suffix = fileSelectedInterface.suffix()
+                if (!suffix.isNullOrEmpty()) {
+                    chooseFilePath(suffix)
+                } else {
+                    val intent = Intent(Intent.ACTION_GET_CONTENT)
+                    val mimeType = fileSelectedInterface.mimeType()
+                    if (mimeType != null) {
+                        intent.type = mimeType
+                    } else {
+                        intent.type = "*/*"
+                    }
+                    intent.addCategory(Intent.CATEGORY_OPENABLE)
+                    externalFileChooserLauncher.launch(intent)
+                }
+            }
+            true
         } catch (ex: java.lang.Exception) {
-            null
+            false
         }
+
     }
 
     private fun showDialog(msg: String) {

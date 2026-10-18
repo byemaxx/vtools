@@ -264,9 +264,6 @@ class ActivityMain : ActivityBase() {
         lastSelectedTab = tabIndex
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
-    }
-
     //返回键事件
     override fun onBackPressed() {
         try {

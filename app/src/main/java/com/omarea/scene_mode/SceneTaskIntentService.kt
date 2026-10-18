@@ -39,7 +39,7 @@ class SceneTaskIntentService : Service() {
         intent?.run {
             val taskId = if (intent.hasExtra("taskId")) intent.getStringExtra("taskId") else null
             taskId?.run {
-                executeTask(this)
+                executeTask(this@SceneTaskIntentService, this)
             }
         }
     }
@@ -51,39 +51,39 @@ class SceneTaskIntentService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    private fun executeTask(taskId: String) {
-        val context = this
-        val timingTask = TimingTaskStorage(context).load(taskId)
-        timingTask?.run {
-            if (!TaskExecutionPolicy.canExecute(enabled, expireDate, System.currentTimeMillis())) {
-                enabled = false
-                TimingTaskManager(context).setTaskAndSave(this)
-                return
-            }
-            TimingTaskManager(context).setTask(this)
+    companion object {
+        fun executeTask(context: Context, taskId: String) {
+            val timingTask = TimingTaskStorage(context).load(taskId)
+            timingTask?.run {
+                if (!TaskExecutionPolicy.canExecute(enabled, expireDate, System.currentTimeMillis())) {
+                    enabled = false
+                    TimingTaskManager(context).setTaskAndSave(this)
+                    return
+                }
+                TimingTaskManager(context).setTask(this)
 
-            if (chargeOnly && GlobalStatus.batteryStatus == BatteryManager.BATTERY_STATUS_DISCHARGING) {
-                Toast.makeText(context, "Not in charging state, skip timing task", Toast.LENGTH_LONG).show()
-            } else if (batteryCapacityRequire > 0 && GlobalStatus.batteryStatus == BatteryManager.BATTERY_STATUS_DISCHARGING && GlobalStatus.batteryCapacity < batteryCapacityRequire) {
-                Toast.makeText(context, "Power level below" + batteryCapacityRequire + "%，Skip Timed Tasks", Toast.LENGTH_LONG).show()
-            } else if (afterScreenOff && ScreenState(context).isScreenOn()) {
-                // 如果是个要求屏幕关闭后执行的任务，且现在屏幕还在点亮状态，放到息屏事件观测队列中
-                EventBus.subscribe(ScreenDelayTaskReceiver(taskId, context.applicationContext))
-            } else {
-                TaskActionsExecutor(this.taskActions, this.customTaskActions, context).run()
+                if (chargeOnly && GlobalStatus.batteryStatus == BatteryManager.BATTERY_STATUS_DISCHARGING) {
+                    Toast.makeText(context, "Not in charging state, skip timing task", Toast.LENGTH_LONG).show()
+                } else if (batteryCapacityRequire > 0 && GlobalStatus.batteryStatus == BatteryManager.BATTERY_STATUS_DISCHARGING && GlobalStatus.batteryCapacity < batteryCapacityRequire) {
+                    Toast.makeText(context, "Power level below" + batteryCapacityRequire + "%，Skip Timed Tasks", Toast.LENGTH_LONG).show()
+                } else if (afterScreenOff && ScreenState(context).isScreenOn()) {
+                    // 如果是个要求屏幕关闭后执行的任务，且现在屏幕还在点亮状态，放到息屏事件观测队列中
+                    EventBus.subscribe(ScreenDelayTaskReceiver(taskId, context.applicationContext))
+                } else {
+                    TaskActionsExecutor(this.taskActions, this.customTaskActions, context).run()
+                }
             }
         }
+
     }
 
     // 屏幕关闭后才执行的任务
     class ScreenDelayTaskReceiver(private val taskId: String, private val context: Context, override val isAsync: Boolean = false) : IEventReceiver {
         override fun onReceive(eventType: EventType, data: HashMap<String, Any>?) {
             EventBus.unsubscribe(this)
-            val taskIntent = Intent(context, SceneTaskIntentService::class.java)
-            taskIntent.putExtra("taskId", taskId)
-            taskIntent.action = taskId
-
-            this.context.startService(taskIntent)
+            val work = androidx.work.OneTimeWorkRequestBuilder<com.omarea.vtools.workers.DelayedTimingTaskWorker>()
+                .setInputData(androidx.work.workDataOf("taskId" to taskId)).build()
+            androidx.work.WorkManager.getInstance(context).enqueue(work)
         }
 
         override fun onSubscribe() {

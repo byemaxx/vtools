@@ -30,7 +30,6 @@ import com.omarea.vtools.dialogs.DialogNumberInput
 import com.omarea.vtools.databinding.ActivityChargeControllerBinding
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import java.util.*
 
@@ -401,7 +400,7 @@ class ActivityChargeController : ActivityBase() {
     private var ResumeCharge = ""
 
     private fun notifyConfigChanged() {
-        GlobalScope.launch(Dispatchers.IO) {
+        activityScope.launch(Dispatchers.IO) {
             EventBus.publish(EventType.CHARGE_CONFIG_CHANGED)
         }.start()
     }

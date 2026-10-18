@@ -74,7 +74,9 @@ import com.omarea.vtools.activities.*
 import com.omarea.vtools.dialogs.DialogElectricityUnit
 import com.omarea.utils.BatteryPower
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.math.BigDecimal
@@ -150,7 +152,7 @@ class FragmentHome : Fragment() {
 
     private suspend fun forceKSWAPD(mode: Int): String {
         return withContext(Dispatchers.Default) {
-            ShellTranslation(context!!).resolveRow(SwapUtils(context!!).forceKswapd(mode))
+            ShellTranslation(requireContext()).resolveRow(SwapUtils(requireContext()).forceKswapd(mode))
         }
     }
 
@@ -164,12 +166,15 @@ class FragmentHome : Fragment() {
     }
 
     @SuppressLint("ClickableViewAccessibility")
+    private var viewScope: CoroutineScope? = null
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        activityManager = context!!.getSystemService(ACTIVITY_SERVICE) as ActivityManager
-        batteryManager = context!!.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+        viewScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+        activityManager = requireContext().getSystemService(ACTIVITY_SERVICE) as ActivityManager
+        batteryManager = requireContext().getSystemService(Context.BATTERY_SERVICE) as BatteryManager
 
-        globalSPF = context!!.getSharedPreferences(SpfConfig.GLOBAL_SPF, Context.MODE_PRIVATE)
+        globalSPF = requireContext().getSharedPreferences(SpfConfig.GLOBAL_SPF, Context.MODE_PRIVATE)
 
         val deviceName = when (Build.VERSION.SDK_INT) {
             31 -> "Android 12"
@@ -290,8 +295,8 @@ class FragmentHome : Fragment() {
 
     private fun onMemoryClear() {
         uiState.value = uiState.value.copy(ramInfoText = getString(R.string.please_wait))
-        GlobalScope.launch(Dispatchers.Main) {
-            dropCaches()
+        viewScope?.launch(Dispatchers.Main) {
+            withContext(Dispatchers.IO) { dropCaches() }
             Scene.toast(getString(R.string.home_cache_cleared), Toast.LENGTH_SHORT)
         }
     }
@@ -299,10 +304,10 @@ class FragmentHome : Fragment() {
     private fun onMemoryCompact(isLong: Boolean) {
         uiState.value = uiState.value.copy(zramInfoText = getString(R.string.please_wait))
         if (!isLong) {
-            Toast.makeText(context!!, R.string.home_shell_begin, Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), R.string.home_shell_begin, Toast.LENGTH_SHORT).show()
         }
-        GlobalScope.launch(Dispatchers.Main) {
-            val result = forceKSWAPD(if (isLong) 2 else 1)
+        viewScope?.launch(Dispatchers.Main) {
+            val result = withContext(Dispatchers.IO) { forceKSWAPD(if (isLong) 2 else 1) }
             Scene.toast(result, Toast.LENGTH_SHORT)
         }
     }
@@ -310,15 +315,15 @@ class FragmentHome : Fragment() {
     private fun onOpenHelp() {
         try {
             startActivity(
-                Intent(Intent.ACTION_VIEW, Uri.parse("http://vtools.omarea.com/"))
+                Intent(Intent.ACTION_VIEW, Uri.parse("https://vtools.omarea.com/"))
             )
         } catch (ex: Exception) {
-            Toast.makeText(context!!, R.string.home_browser_error, Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), R.string.home_browser_error, Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun onBatteryEdit() {
-        DialogElectricityUnit().showDialog(context!!)
+        DialogElectricityUnit().showDialog(requireContext())
     }
 
     private fun onMemoryCardClick() {
@@ -338,7 +343,7 @@ class FragmentHome : Fragment() {
         if (isDetached) {
             return
         }
-        activity!!.title = getString(R.string.app_name)
+        requireActivity().title = getString(R.string.app_name)
 
         maxFreqList.clear()
         minFreqList.clear()
@@ -417,7 +422,7 @@ class FragmentHome : Fragment() {
      * dp转换成px
      */
     private fun dp2px(dpValue: Float): Int {
-        val scale = context!!.resources.displayMetrics.density
+        val scale = requireContext().resources.displayMetrics.density
         return (dpValue * scale + 0.5f).toInt()
     }
 
@@ -477,7 +482,7 @@ class FragmentHome : Fragment() {
         val memInfo = memoryUtils.memoryInfo
         val platform = platformUtils.getCPUName()
         if (updateTick == 0 || updateTick == 3) {
-            GlobalScope.launch(Dispatchers.IO) {
+            viewScope?.launch(Dispatchers.IO) {
                 val processList = processUtils.allProcess
                 myHandler.post {
                     processAdapter?.setList(processList)
@@ -553,7 +558,7 @@ class FragmentHome : Fragment() {
                     }
                     cpuGridHeightDp.intValue = (layoutHeight / resources.displayMetrics.density).toInt()
                     cpuCoreListView?.numColumns = cpuGridColumns.intValue
-                    cpuAdapter = AdapterCpuCores(context!!, cores)
+                    cpuAdapter = AdapterCpuCores(requireContext(), cores)
                     cpuCoreListView?.adapter = cpuAdapter
                 } else {
                     cpuAdapter?.setData(cores)
@@ -613,6 +618,8 @@ class FragmentHome : Fragment() {
     }
 
     override fun onDestroyView() {
+        viewScope?.cancel()
+        viewScope = null
         super.onDestroyView()
         composeView = null
     }

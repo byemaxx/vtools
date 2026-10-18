@@ -1,277 +1,72 @@
 package com.omarea.common.shared;
 
-import android.annotation.SuppressLint;
-import android.content.ContentUris;
 import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Environment;
 import android.provider.DocumentsContract;
-import android.provider.MediaStore;
 import android.provider.OpenableColumns;
-
-import java.io.BufferedOutputStream;
+import android.util.Log;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import kotlin.text.Regex;
-
 public class FilePathResolver {
-    /**
-     * 返回文件本地绝对路径
-     *
-     * @param context
-     * @param uri
-     * @return path of the selected image file from gallery
-     */
-    @SuppressLint("NewApi")
-    public String getPath(final Context context, final Uri uri) {
-        // DocumentProvider
-        if (DocumentsContract.isDocumentUri(context, uri)) {
-
-            // ExternalStorageProvider
-            if (isExternalStorageDocument(uri)) {
-                final String docId = DocumentsContract.getDocumentId(uri);
-                final String[] split = docId.split(":");
-                final String type = split[0];
-
-                if ("primary".equalsIgnoreCase(type)) {
-                    return Environment.getExternalStorageDirectory() + "/"
-                            + split[1];
+    public String getPath(Context context, Uri uri) {
+        if (uri == null) return null;
+        if ("file".equalsIgnoreCase(uri.getScheme())) return uri.getPath();
+        if (!"content".equalsIgnoreCase(uri.getScheme())) return null;
+        File imported = null;
+        try {
+            if ("com.android.externalstorage.documents".equals(uri.getAuthority()) && DocumentsContract.isDocumentUri(context, uri)) {
+                String[] id = DocumentsContract.getDocumentId(uri).split(":", 2);
+                if (id.length == 2 && "primary".equalsIgnoreCase(id[0])) {
+                    File root = Environment.getExternalStorageDirectory().getCanonicalFile();
+                    File file = new File(root, id[1]).getCanonicalFile();
+                    if (file.getPath().startsWith(root.getPath() + File.separator) && file.isFile() && file.canRead()) return file.getPath();
                 }
             }
-            // DownloadsProvider
-            else if (isDownloadsDocument(uri)) {
-                final String id = DocumentsContract.getDocumentId(uri);
-                if (new Regex("^[0-9]{1,}").matches(id)) {
-                    final Uri contentUri = ContentUris.withAppendedId(
-                            Uri.parse("content://downloads/public_downloads"),
-                            Long.parseLong(id));
-                    return getDataColumn(context, contentUri, null, null);
-                } else {
-                    // 拷贝到缓存目录并返回文件
-                    String fileName = getFileName(context, uri);
-                    File cacheDir = getDocumentCacheDir(context);
-                    File file = generateFileName(fileName, cacheDir);
-                    String destinationPath = null;
-                    if (file != null) {
-                        destinationPath = file.getAbsolutePath();
-                        saveFileFromUri(context, uri, destinationPath);
-                    }
-
-                    return destinationPath;
+            File directory = getDocumentCacheDir(context);
+            long budget = Math.max(0, directory.getUsableSpace() - 64L * 1024 * 1024);
+            String name = "document";
+            try (Cursor cursor = context.getContentResolver().query(uri,
+                    new String[]{OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE}, null, null, null)) {
+                if (cursor != null && cursor.moveToFirst()) {
+                    int nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                    if (nameIndex >= 0 && !cursor.isNull(nameIndex)) name = cursor.getString(nameIndex);
+                    int sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE);
+                    if (sizeIndex >= 0 && !cursor.isNull(sizeIndex) && cursor.getLong(sizeIndex) > budget) throw new IOException("Insufficient cache space");
                 }
             }
-            // MediaProvider
-            else if (isMediaDocument(uri)) {
-                final String docId = DocumentsContract.getDocumentId(uri);
-                final String[] split = docId.split(":");
-                final String type = split[0];
-
-                Uri contentUri = null;
-                if ("image".equals(type)) {
-                    contentUri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI;
-                } else if ("video".equals(type)) {
-                    contentUri = MediaStore.Video.Media.EXTERNAL_CONTENT_URI;
-                } else if ("audio".equals(type)) {
-                    contentUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
-                }
-
-                final String selection = "_id=?";
-                final String[] selectionArgs = new String[]{split[1]};
-
-                return getDataColumn(context, contentUri, selection,
-                        selectionArgs);
+            imported = generateFileName(name, directory);
+            if (imported == null) throw new IOException("Cannot create import file");
+            try (InputStream input = context.getContentResolver().openInputStream(uri);
+                 FileOutputStream output = new FileOutputStream(imported)) {
+                if (input == null) throw new IOException("Document provider returned no stream");
+                DocumentCopy.copy(input, output, budget);
             }
-        }
-        // MediaStore (and general)
-        else if ("content".equalsIgnoreCase(uri.getScheme())) {
-
-            // Return the remote address
-            if (isGooglePhotosUri(uri))
-                return uri.getLastPathSegment();
-
-            return getDataColumn(context, uri, null, null);
-        }
-        // File
-        else if ("file".equalsIgnoreCase(uri.getScheme())) {
-            return uri.getPath();
-        }
-
-        return null;
-    }
-
-    /**
-     * Get the value of the data column for this Uri. This is useful for
-     * MediaStore Uris, and other file-based ContentProviders.
-     *
-     * @param context       The context.
-     * @param uri           The Uri to query.
-     * @param selection     (Optional) Filter used in the query.
-     * @param selectionArgs (Optional) Selection arguments used in the query.
-     * @return The value of the _data column, which is typically a file path.
-     */
-    private String getDataColumn(Context context, Uri uri,
-                                 String selection, String[] selectionArgs) {
-
-        Cursor cursor = null;
-        final String column = "_data";
-        final String[] projection = {column};
-
-        try {
-            cursor = context.getContentResolver().query(uri, projection,
-                    selection, selectionArgs, null);
-            if (cursor != null && cursor.moveToFirst()) {
-                final int index = cursor.getColumnIndexOrThrow(column);
-                return cursor.getString(index);
-            }
-        } catch (Exception ignored) {
-        } finally {
-            if (cursor != null)
-                cursor.close();
-        }
-        return null;
-    }
-
-    /**
-     * @param uri The Uri to check.
-     * @return Whether the Uri authority is ExternalStorageProvider.
-     */
-    private boolean isExternalStorageDocument(Uri uri) {
-        return "com.android.externalstorage.documents".equals(uri
-                .getAuthority());
-    }
-
-    /**
-     * @param uri The Uri to check.
-     * @return Whether the Uri authority is DownloadsProvider.
-     */
-    private boolean isDownloadsDocument(Uri uri) {
-        return "com.android.providers.downloads.documents".equals(uri
-                .getAuthority());
-    }
-
-    /**
-     * @param uri The Uri to check.
-     * @return Whether the Uri authority is MediaProvider.
-     */
-    private boolean isMediaDocument(Uri uri) {
-        return "com.android.providers.media.documents".equals(uri
-                .getAuthority());
-    }
-
-    /**
-     * @param uri The Uri to check.
-     * @return Whether the Uri authority is Google Photos.
-     */
-    private boolean isGooglePhotosUri(Uri uri) {
-        return "com.google.android.apps.photos.content".equals(uri
-                .getAuthority());
-    }
-
-    public String getFileName(@NonNull Context context, Uri uri) {
-        String mimeType = context.getContentResolver().getType(uri);
-        String filename = null;
-        if (mimeType == null) {
-            String path = getPath(context, uri);
-            if (path == null) {
-                filename = getName(uri.toString());
-            } else {
-                File file = new File(path);
-                filename = file.getName();
-            }
-        } else {
-            Cursor returnCursor = context.getContentResolver().query(uri, null,
-                    null, null, null);
-            if (returnCursor != null) {
-                int nameIndex = returnCursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
-                returnCursor.moveToFirst();
-                filename = returnCursor.getString(nameIndex);
-                returnCursor.close();
-            }
-        }
-
-        return filename;
-    }
-
-    public String getName(String filename) {
-        if (filename == null) {
+            return imported.getAbsolutePath();
+        } catch (Exception error) {
+            if (imported != null && !imported.delete()) Log.w("DocumentImport", "Cannot remove failed import");
+            Log.w("DocumentImport", "Unable to import selected document", error);
             return null;
         }
-        int index = filename.lastIndexOf('/');
-        return filename.substring(index + 1);
     }
 
-    public static File getDocumentCacheDir(@NonNull Context context) {
-        File dir = new File(context.getCacheDir(), "documents");
-        if (!dir.exists()) {
-            dir.mkdirs();
-        }
-
-        return dir;
+    public static File getDocumentCacheDir(Context context) throws IOException {
+        File directory = new File(context.getCacheDir(), "documents");
+        if (!directory.isDirectory() && !directory.mkdirs()) throw new IOException("Cannot create document cache");
+        return directory;
     }
 
-    @Nullable
-    public static File generateFileName(@Nullable String name, File directory) {
-        if (name == null) {
-            return null;
-        }
-
-        File file = new File(directory, name);
-
-        if (file.exists()) {
-            String fileName = name;
-            String extension = "";
-            int dotIndex = name.lastIndexOf('.');
-            if (dotIndex > 0) {
-                fileName = name.substring(0, dotIndex);
-                extension = name.substring(dotIndex);
-            }
-
-            int index = 0;
-
-            while (file.exists()) {
-                index++;
-                name = fileName + '(' + index + ')' + extension;
-                file = new File(directory, name);
-            }
-        }
-
-        try {
-            if (!file.createNewFile()) {
-                return null;
-            }
-        } catch (IOException e) {
-            return null;
-        }
-
-        return file;
-    }
-
-
-    private static void saveFileFromUri(Context context, Uri uri, String destinationPath) {
-        InputStream is = null;
-        BufferedOutputStream bos = null;
-        try {
-            is = context.getContentResolver().openInputStream(uri);
-            bos = new BufferedOutputStream(new FileOutputStream(destinationPath, false));
-            byte[] buf = new byte[1024];
-            is.read(buf);
-            do {
-                bos.write(buf);
-            } while (is.read(buf) != -1);
-        } catch (IOException ignored) {
-        } finally {
-            try {
-                if (is != null) is.close();
-                if (bos != null) bos.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
+    public static File generateFileName(String name, File directory) throws IOException {
+        // A document provider controls DISPLAY_NAME: it must never select the destination directory.
+        String safe = name == null ? "document" : new File(name.replace('\\', '/')).getName();
+        if (safe.isEmpty() || safe.equals(".") || safe.equals("..")) safe = "document";
+        int dot = safe.lastIndexOf('.');
+        String suffix = dot > 0 ? safe.substring(dot) : "";
+        if (suffix.length() > 32) suffix = "";
+        return File.createTempFile("document-", suffix, directory);
     }
 }

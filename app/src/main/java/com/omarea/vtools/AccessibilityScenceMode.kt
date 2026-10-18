@@ -120,27 +120,17 @@ public class AccessibilityScenceMode : AccessibilityService(), IEventReceiver {
     }
 
     private fun updateConfig() {
-        val info = serviceInfo // AccessibilityServiceInfo()
+        val info = serviceInfo
+        val automate = spf.getBoolean(SpfConfig.GLOBAL_SPF_AUTO_INSTALL, false) ||
+            spf.getBoolean(SpfConfig.GLOBAL_SPF_SKIP_AD, false)
         info.eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or AccessibilityEvent.TYPE_WINDOWS_CHANGED
-
-        info.notificationTimeout = 0
-
-        if (spf.getBoolean(SpfConfig.GLOBAL_SPF_AUTO_INSTALL, false) || spf.getBoolean(SpfConfig.GLOBAL_SPF_SKIP_AD, false)) {
-            info.eventTypes = Flags(info.eventTypes).addFlag(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED)
-            if (spf.getBoolean(SpfConfig.GLOBAL_SPF_SKIP_AD, false)) {
-                // 仅用于调试时捕获广告按钮，发布时硬移除此flag
-                // info.eventTypes = Flags(info.eventTypes).addFlag(AccessibilityEvent.TYPE_VIEW_CLICKED)
-            }
-        }
-
+        if (automate) info.eventTypes = info.eventTypes or AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
         info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
-        info.notificationTimeout = 0
-        info.packageNames = null
-
-        info.flags = AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
-
-        // 捕获实体按键实践
-        // info.flags = Flags(info.flags).addFlag(AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS)
+        info.notificationTimeout = if (automate) 50 else 100
+        info.packageNames = null // Foreground app detection needs window events from every app.
+        info.flags = AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+        if (automate) info.flags = info.flags or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
+            AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
 
         serviceInfo = info
     }
@@ -608,6 +598,7 @@ public class AccessibilityScenceMode : AccessibilityService(), IEventReceiver {
     }
 
     private fun destroy() {
+        stopActivityPolling()
         EventBus.unsubscribe(this)
         if (appSwitchHandler != null) {
             appSwitchHandler?.run {

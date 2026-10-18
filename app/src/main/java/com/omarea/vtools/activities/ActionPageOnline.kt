@@ -1,5 +1,7 @@
 package com.omarea.vtools.activities
 
+import kotlinx.coroutines.launch
+
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
@@ -40,15 +42,16 @@ class ActionPageOnline : ActivityBase() {
     private var fileSelectedInterface: ParamsFileChooserRender.FileSelectedInterface? = null
 
     private val fileChooserLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val resultUri = if (result.resultCode == Activity.RESULT_OK) result.data?.data else null
-        if (fileSelectedInterface != null) {
-            if (resultUri != null) {
-                fileSelectedInterface?.onFileSelected(getPath(resultUri))
-            } else {
-                fileSelectedInterface?.onFileSelected(null)
-            }
-        }
+        val uri = if (result.resultCode == Activity.RESULT_OK) result.data?.data else null
+        val callback = fileSelectedInterface
         fileSelectedInterface = null
+        if (callback != null) activityScope.launch {
+            val path = if (uri == null) null else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                FilePathResolver().getPath(applicationContext, uri)
+            }
+            if (uri != null && path == null) Toast.makeText(this@ActionPageOnline, R.string.document_import_failed, Toast.LENGTH_LONG).show()
+            callback.onFileSelected(path)
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -18,7 +18,6 @@ import com.omarea.vtools.R
 import com.omarea.vtools.databinding.ActivtyModulesBinding
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import java.util.*
 
@@ -49,7 +48,7 @@ class ActivityModules : ActivityBase(), AdapterModules.OnItemClickListener {
                 val text = v.text.toString()
                 val view = (v as EditText)
                 view.isEnabled = false
-                GlobalScope.launch(Dispatchers.IO) {
+                activityScope.launch(Dispatchers.IO) {
                     try {
                         val modules = MagiskModulesRepo().query(text)
                         if (!isDestroyed) {

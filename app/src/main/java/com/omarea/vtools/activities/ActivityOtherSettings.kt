@@ -1,5 +1,7 @@
 package com.omarea.vtools.activities
 
+import kotlinx.coroutines.launch
+
 import android.Manifest
 import android.content.Context
 import android.content.SharedPreferences
@@ -62,10 +64,12 @@ class ActivityOtherSettings : ActivityBase() {
             }
         }
         binding.settingsLogcat.setOnClickListener {
-            val log = AppErrorLogcatUtils().catLogInfo()
-            binding.settingsLogContent.visibility = View.VISIBLE
-            binding.settingsLogContent.setText(log)
-            binding.settingsLogContent.setSelection(0, log.length)
+            activityScope.launch {
+                val log = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { AppErrorLogcatUtils().catLogInfo(applicationContext) }
+                binding.settingsLogContent.visibility = View.VISIBLE
+                binding.settingsLogContent.setText(log)
+                binding.settingsLogContent.setSelection(0, log.length)
+            }
         }
 
         binding.settingsDebugLayer.isChecked = spf.getBoolean(SpfConfig.GLOBAL_SPF_SCENE_LOG, false)
@@ -78,11 +82,6 @@ class ActivityOtherSettings : ActivityBase() {
         binding.settingsHelpIcon.isChecked = spf.getBoolean(SpfConfig.GLOBAL_SPF_HELP_ICON, true)
         binding.settingsHelpIcon.setOnClickListener {
             spf.edit().putBoolean(SpfConfig.GLOBAL_SPF_HELP_ICON, (it as Switch).isChecked).apply()
-        }
-
-        binding.settingsAutoExit.isChecked = spf.getBoolean(SpfConfig.GLOBAL_SPF_AUTO_EXIT, true)
-        binding.settingsAutoExit.setOnClickListener {
-            spf.edit().putBoolean(SpfConfig.GLOBAL_SPF_AUTO_EXIT, (it as Switch).isChecked).apply()
         }
 
         binding.settingsBlackNotification.isChecked = spf.getBoolean(SpfConfig.GLOBAL_NIGHT_BLACK_NOTIFICATION, false)

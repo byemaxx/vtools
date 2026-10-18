@@ -12,9 +12,9 @@ import com.omarea.store.SpfConfig;
 public class ReceiverShortcut extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
-        if (intent != null && intent.hasExtra("packageName")) {
+        if (intent != null && context.getString(com.omarea.vtools.R.string.scene_create_shortcut_action).equals(intent.getAction()) && intent.hasExtra("packageName")) {
             String packageName = intent.getStringExtra("packageName");
-            if (packageName.equals(context.getPackageName())) {
+            if (!com.omarea.utils.AndroidPackageName.isValid(packageName) || packageName.equals(context.getPackageName())) {
                 return;
             }
 

@@ -22,7 +22,9 @@ import com.omarea.vtools.AccessibilityScenceMode
 import com.omarea.vtools.R
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.util.*
 import kotlin.collections.ArrayList
@@ -56,6 +58,7 @@ class AppSwitchHandler(private var context: AccessibilityScenceMode, override va
     private var handler = Handler(Looper.getMainLooper())
     private var notifyHelper = AlwaysNotification(context, true)
     private val sceneMode = SceneMode.getNewInstance(context, SceneConfigStore(context))!!
+    private val handlerScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var timer: Timer? = null
     private var sceneAppChanged: BroadcastReceiver? = null
     private var screenState = ScreenState(context)
@@ -268,6 +271,8 @@ class AppSwitchHandler(private var context: AccessibilityScenceMode, override va
     }
 
     override fun onUnsubscribe() {
+        handlerScope.cancel()
+        handler.removeCallbacksAndMessages(null)
         sceneMode.clearState()
         notifyHelper.hideNotify()
         stopTimer()
@@ -349,7 +354,7 @@ class AppSwitchHandler(private var context: AccessibilityScenceMode, override va
             KeepShellPublic.doCmdSync(CommonCmds.DisableSELinux)
         }
 
-        GlobalScope.launch(Dispatchers.IO) {
+        handlerScope.launch(Dispatchers.IO) {
             initConfig()
         }
 

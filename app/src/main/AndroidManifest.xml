@@ -51,7 +51,8 @@
         android:persistent="false"
         android:supportsRtl="true"
         android:theme="@style/AppTheme"
-        android:usesCleartextTraffic="true"
+        android:usesCleartextTraffic="false"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:requestLegacyExternalStorage="true"
         tools:ignore="GoogleAppIndexingWarning,UnusedAttribute">
         <provider
@@ -82,9 +83,6 @@
         </activity>
 
         <service
-            android:name="com.omarea.scene_mode.TriggerExecutorService"
-            android:exported="false" />
-        <service
             android:name="com.omarea.scene_mode.SceneTaskIntentService"
             android:enabled="true"
             android:exported="false">
@@ -96,7 +94,7 @@
         <receiver
             android:name="com.omarea.scene_mode.ReceiverSceneMode"
             android:enabled="true"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="com.omarea.scene_mode.ReceiverSceneMode" />
             </intent-filter>
@@ -104,7 +102,7 @@
         <receiver
             android:name="com.omarea.vtools.ReceiverCompileState"
             android:enabled="true"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="com.omarea.vtools.ReceiverCompileState" />
             </intent-filter>
@@ -328,9 +326,9 @@
         <receiver
             android:name="com.omarea.scene_mode.ReceiverShortcut"
             android:enabled="true"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
-                <action android:name="@string/" />
+                <action android:name="@string/scene_create_shortcut_action" />
 
                 <category android:name="android.intent.category.HOME" />
             </intent-filter>

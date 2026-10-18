@@ -51,7 +51,15 @@ public class DownloaderReceiver extends BroadcastReceiver {
                         context.startActivity(handlerIntent);
                     }
                     */
-                    String path = new FilePathResolver().getPath(context, uri);
+                    String path = null;
+                    try (android.database.Cursor cursor = downloadManager.query(new DownloadManager.Query().setFilterById(downloadId))) {
+                        if (cursor != null && cursor.moveToFirst()) {
+                            int column = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI);
+                            String local = column < 0 ? null : cursor.getString(column);
+                            if (local != null && "file".equals(Uri.parse(local).getScheme())) path = Uri.parse(local).getPath();
+                        }
+                    }
+                    if (path == null) path = new FilePathResolver().getPath(context, uri);
                     if (path != null && !path.isEmpty()) {
                         new Downloader(context, null).saveTaskCompleted(downloadId, path);
                         try {

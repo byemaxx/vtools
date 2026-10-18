@@ -162,21 +162,6 @@
                     android:layout_height="wrap_content"
                     android:text="@string/settings_help_icon_desc" />
 
-                <Switch
-                    android:id="@+id/settings_auto_exit"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="@dimen/activity_vertical_margin"
-                    android:onClick="onThemeClick"
-                    android:tag="10"
-                    android:text="@string/settings_auto_exit" />
-
-                <TextView
-                    style="@style/textSmall"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/settings_auto_exit_desc" />
-
                 <TextView
                     style="@style/textTitle"
                     android:layout_width="match_parent"

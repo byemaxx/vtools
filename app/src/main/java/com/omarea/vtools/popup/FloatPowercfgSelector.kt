@@ -25,7 +25,9 @@ import com.omarea.utils.AccessibleServiceHelper
 import com.omarea.utils.WindowCompatHelper
 import com.omarea.vtools.R
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 /**
@@ -35,6 +37,7 @@ import kotlinx.coroutines.launch
  */
 class FloatPowercfgSelector(context: Context) {
     private val mContext: Context = context.applicationContext
+    private var popupScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var mView: View? = null
     private var modeSwitcher = ModeSwitcher()
     private data class RefreshMode(val id: Int, val label: String)
@@ -49,6 +52,8 @@ class FloatPowercfgSelector(context: Context) {
             return
         }
 
+        popupScope.cancel()
+        popupScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
         isShown = true
         // 获取WindowManager
         mWindowManager = mContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -92,6 +97,7 @@ class FloatPowercfgSelector(context: Context) {
      * 隐藏弹出框
      */
     fun close() {
+        popupScope.cancel()
         if (isShown!! &&
                 null != this.mView) {
             mWindowManager!!.removeView(mView)
@@ -150,9 +156,9 @@ class FloatPowercfgSelector(context: Context) {
             titleView.setTextColor(Color.BLACK)
         }
 
-        GlobalScope.launch(Dispatchers.IO) {
+        popupScope.launch(Dispatchers.IO) {
             val modes = loadRefreshModes(context)
-            GlobalScope.launch(Dispatchers.Main) {
+            kotlinx.coroutines.withContext(Dispatchers.Main) {
                 if (modes.isNotEmpty()) {
                     refreshRateButtons.removeAllViews()
                     val paddingH = (6 * context.resources.displayMetrics.density).toInt()
@@ -286,7 +292,7 @@ class FloatPowercfgSelector(context: Context) {
         // 震动反馈
         val hapticFeedback = Runnable {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                GlobalScope.launch(Dispatchers.IO) {
+                popupScope.launch(Dispatchers.Main) {
                     try {
                         view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                     } catch (ex: Exception) {}

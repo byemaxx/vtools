@@ -25,7 +25,6 @@ import com.omarea.vtools.R
 import com.omarea.vtools.popup.FloatFpsWatch
 import com.omarea.vtools.databinding.ActivityFpsChartBinding
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 
@@ -85,8 +84,8 @@ class ActivityFpsChart : ActivityBase(), AdapterSessions.OnItemClickListener {
         val linearLayoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
         binding.chartSessions.layoutManager = linearLayoutManager
         val appInfoLoader = AppInfoLoader(context)
-        GlobalScope.launch(Dispatchers.Main) {
-            val sessions = fpsWatchStore.sessions()
+        activityScope.launch(Dispatchers.Main) {
+            val sessions = kotlinx.coroutines.withContext(Dispatchers.IO) { fpsWatchStore.sessions() }
             sessions.forEach {
                 val appInfo = appInfoLoader.loadAppBasicInfo(it.packageName).await()
                 it.appName = appInfo.appName

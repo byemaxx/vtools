@@ -40,7 +40,12 @@ class ActivityQuickStart : Activity() {
         if (extras == null || !extras.containsKey("packageName")) {
             updateStartStateText("Invalid shortcut!")
         } else {
-            appPackageName = intent.getStringExtra("packageName")!!;
+            val target = intent.getStringExtra("packageName")
+            if (!com.omarea.utils.AndroidPackageName.isValid(target)) {
+                updateStartStateText("Invalid shortcut!")
+                return
+            }
+            appPackageName = target!!
             val pm = packageManager
 
             var appInfo: ApplicationInfo? = null

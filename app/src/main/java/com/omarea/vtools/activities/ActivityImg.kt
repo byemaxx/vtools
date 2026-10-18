@@ -1,5 +1,7 @@
 package com.omarea.vtools.activities
 
+import kotlinx.coroutines.launch
+
 import android.app.Activity
 import android.content.Intent
 import android.os.Build
@@ -38,15 +40,17 @@ class ActivityImg : ActivityBase() {
             return@registerForActivityResult
         }
         if (Build.VERSION.SDK_INT >= 30 && !useInnerFileChooser) {
-            val absPath = FilePathResolver().getPath(this, data.data)
-            if (absPath != null) {
-                if (absPath.endsWith(".img")) {
-                    flash(absPath, requestCode)
+            activityScope.launch {
+                val absPath = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { FilePathResolver().getPath(applicationContext, data.data) }
+                if (absPath != null) {
+                    if (absPath.endsWith(".img")) {
+                        flash(absPath, requestCode)
+                    } else {
+                        Toast.makeText(this@ActivityImg, "Invalid file (should be a .img file)!", Toast.LENGTH_SHORT).show()
+                    }
                 } else {
-                    Toast.makeText(this, "Invalid file (should be a .img file)!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@ActivityImg, "Selected file not found!", Toast.LENGTH_SHORT).show()
                 }
-            } else {
-                Toast.makeText(this, "Selected file not found!", Toast.LENGTH_SHORT).show()
             }
         } else {
             if (data.extras?.containsKey("file") == true) {

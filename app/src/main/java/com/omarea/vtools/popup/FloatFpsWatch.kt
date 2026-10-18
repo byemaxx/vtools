@@ -34,11 +34,15 @@ import com.omarea.scene_mode.ModeSwitcher
 import com.omarea.store.FpsWatchStore
 import com.omarea.utils.WindowCompatHelper
 import com.omarea.vtools.R
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.util.*
 
 public class FloatFpsWatch(private val mContext: Context) {
+    private var popupScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var startMonitorTime = 0L
     private val fpsWatchStore = FpsWatchStore(mContext)
     @Volatile private var sessionId = 0L
@@ -116,9 +120,11 @@ public class FloatFpsWatch(private val mContext: Context) {
         }
         mWindowManager!!.addView(mView, params)
 
+        popupScope.cancel()
+        popupScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
         startTimer()
         EventBus.subscribe(appWatch)
-        GlobalScope.launch {
+        popupScope.launch(Dispatchers.IO) {
             coreCount = CpuFrequencyUtils().coreCount
             clusters = CpuFrequencyUtils().clusterInfo
         }
@@ -267,6 +273,7 @@ public class FloatFpsWatch(private val mContext: Context) {
      * 隐藏弹出框
      */
     fun hidePopupWindow() {
+        popupScope.cancel()
         stopTimer()
         if (show!! && null != mView) {
             mWindowManager!!.removeView(mView)

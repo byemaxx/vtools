@@ -39,7 +39,6 @@ import com.omarea.vtools.R
 import com.omarea.xposed.XposedCheck
 import com.omarea.vtools.databinding.ActivityFreezeAppsBinding
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 
 class ActivityFreezeApps : ActivityBase() {
@@ -276,7 +275,7 @@ class ActivityFreezeApps : ActivityBase() {
     // 切换[图标置灰模式]
     private fun switchSuspendMode() {
         processBarDialog.showDialog()
-        GlobalScope.launch(Dispatchers.IO) {
+        activityScope.launch(Dispatchers.IO) {
             for (it in freezeApps) {
                 enableApp(it)
                 disableApp(it)
@@ -489,7 +488,7 @@ class ActivityFreezeApps : ActivityBase() {
         view.findViewById<View>(R.id.menu_freeze).setOnClickListener { _ ->
             dialog.dismiss()
             processBarDialog.showDialog()
-            GlobalScope.launch(Dispatchers.IO) {
+            activityScope.launch(Dispatchers.IO) {
                 for (it in freezeApps) {
                     disableApp(it)
                 }
@@ -681,7 +680,7 @@ class ActivityFreezeApps : ActivityBase() {
     // 自动筛选已冻结的普通应用，添加到应用偏见列表
     private fun autoAddList() {
         processBarDialog.showDialog(getString(R.string.please_wait))
-        GlobalScope.launch(Dispatchers.IO) {
+        activityScope.launch(Dispatchers.IO) {
             val appListHelper = AppListHelper(context)
             val frozenApp = appListHelper.getUserAppList().filter {
                 (!it.enabled || it.suspended) && !(freezeApps.contains(it.packageName) || appListHelper.isSystemApp(applicationInfo))

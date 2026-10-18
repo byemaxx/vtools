@@ -102,6 +102,7 @@ class SceneMode private constructor(private val context: AccessibilityScenceMode
         }
 
         fun suspendApp(app: String) {
+            require(com.omarea.utils.AndroidPackageName.isValid(app)) { "Invalid package name" }
             if (app.equals("com.android.vending")) {
                 GAppsUtilis().disable(KeepShellPublic.secondaryKeepShell);
             } else {
@@ -110,6 +111,7 @@ class SceneMode private constructor(private val context: AccessibilityScenceMode
         }
 
         fun freezeApp(app: String) {
+            require(com.omarea.utils.AndroidPackageName.isValid(app)) { "Invalid package name" }
             if (app.equals("com.android.vending")) {
                 GAppsUtilis().disable(KeepShellPublic.secondaryKeepShell);
             } else {
@@ -118,6 +120,7 @@ class SceneMode private constructor(private val context: AccessibilityScenceMode
         }
 
         fun unfreezeApp(app: String) {
+            require(com.omarea.utils.AndroidPackageName.isValid(app)) { "Invalid package name" }
             getCurrentInstance()?.setFreezeAppLeaveTime(app)
 
             if (app.equals("com.android.vending")) {

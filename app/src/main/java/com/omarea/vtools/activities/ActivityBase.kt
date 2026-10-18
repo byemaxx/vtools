@@ -16,6 +16,13 @@ import com.omarea.store.SpfConfig
 import com.omarea.vtools.R
 
 open class ActivityBase : AppCompatActivity() {
+    protected val activityScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main + kotlinx.coroutines.SupervisorJob())
+
+    override fun onDestroy() {
+        activityScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
+        super.onDestroy()
+    }
+
     public lateinit var themeMode: ThemeMode
     private var lastUiMode = Configuration.UI_MODE_NIGHT_UNDEFINED
     private var lastThemePref = Int.MIN_VALUE
@@ -74,7 +81,8 @@ open class ActivityBase : AppCompatActivity() {
         try {
             val service = this.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
             for (task in service.appTasks) {
-                if (task.taskInfo.taskId == this.taskId) {
+                @Suppress("DEPRECATION")
+                if (task.taskInfo.id == this.taskId) {
                     task.setExcludeFromRecents(true)
                 }
             }

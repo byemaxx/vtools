@@ -88,7 +88,7 @@ class Update {
                 "Download new version " + jsonObject.getString("versionName") + "?",
                 "What's new:" + "\n\n" + jsonObject.getString("message"),
                 {
-                    var downloadUrl = "http://vtools.oss-cn-beijing.aliyuncs.com/app-release${jsonObject.getInt("versionCode")}.apk"// "http://47.106.224.127/publish/app-release.apk"
+                    var downloadUrl = "https://vtools.oss-cn-beijing.aliyuncs.com/app-release${jsonObject.getInt("versionCode")}.apk"// "http://47.106.224.127/publish/app-release.apk"
                     if (jsonObject.has("downloadUrl")) {
                         downloadUrl = jsonObject.getString("downloadUrl")
                     }

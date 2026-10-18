@@ -31,6 +31,8 @@ class GeneralPermissions(private val context: Context) {
                 // Manifest.permission.INSTALL_SHORTCUT
         )
         requiredPermission.forEach {
+            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.P &&
+                (it == Manifest.permission.READ_EXTERNAL_STORAGE || it == Manifest.permission.WRITE_EXTERNAL_STORAGE)) return@forEach
             if (it == Manifest.permission.MANAGE_EXTERNAL_STORAGE) {
                 // 所有文件访问权限（便于内置文件选择器加载文件）
                 if (Build.VERSION.SDK_INT >= 30 && !Environment.isExternalStorageManager()) {

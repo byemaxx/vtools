@@ -24,7 +24,9 @@ import com.omarea.vtools.databinding.FragmentAppListBinding
 import com.omarea.vtools.dialogs.DialogAppOptions
 import com.omarea.vtools.dialogs.DialogSingleAppOptions
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.lang.ref.WeakReference
 
@@ -38,15 +40,18 @@ class FragmentAppUser(private val myHandler: Handler) : androidx.fragment.app.Fr
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?,
                               savedInstanceState: Bundle?): View? {
-        processBarDialog = ProgressBarDialog(activity!!, "FragmentAppUser")
-        appListHelper = AppListHelper(context!!)
+        processBarDialog = ProgressBarDialog(requireActivity(), "FragmentAppUser")
+        appListHelper = AppListHelper(requireContext())
 
         _binding = FragmentAppListBinding.inflate(inflater, container, false)
         return binding.root
     }
 
+    private var viewScope: CoroutineScope? = null
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        viewScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
         binding.appList.addHeaderView(this.layoutInflater.inflate(R.layout.list_header_app, null))
 
@@ -55,13 +60,13 @@ class FragmentAppUser(private val myHandler: Handler) : androidx.fragment.app.Fr
                 return@OnItemLongClickListener true
             val adapter = (parent.adapter as HeaderViewListAdapter).wrappedAdapter
             val app = adapter.getItem(position - 1) as AppInfo
-            DialogSingleAppOptions(activity!!, app, myHandler!!).showSingleAppOptions()
+            DialogSingleAppOptions(requireActivity(), app, myHandler!!).showSingleAppOptions()
             true
         }
 
         binding.appList.onItemLongClickListener = onItemLongClick
         binding.fabApps.setOnClickListener {
-            getSelectedAppShowOptions(activity!!)
+            getSelectedAppShowOptions(requireActivity())
         }
 
         this.setList()
@@ -84,11 +89,20 @@ class FragmentAppUser(private val myHandler: Handler) : androidx.fragment.app.Fr
     }
 
     private fun setList() {
+        if (_binding == null) return
         processBarDialog.showDialog()
-        GlobalScope.launch(Dispatchers.Main) {
-            appList = appListHelper.getUserAppList()
-            processBarDialog.hideDialog()
-            setListData(appList, binding.appList)
+        viewScope?.launch(Dispatchers.Main) {
+            try {
+                appList = kotlinx.coroutines.withContext(Dispatchers.IO) { appListHelper.getUserAppList() }
+                setListData(appList, binding.appList)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                android.util.Log.e("SceneApps", "Unable to load applications", error)
+                context?.let { Toast.makeText(it, R.string.app_list_load_failed, Toast.LENGTH_LONG).show() }
+            } finally {
+                processBarDialog.hideDialog()
+            }
         }
     }
 
@@ -96,8 +110,9 @@ class FragmentAppUser(private val myHandler: Handler) : androidx.fragment.app.Fr
         if (dl == null)
             return
         myHandler.post {
+            if (_binding == null) return@post
             try {
-                val adapterObj = AdapterAppList(context!!, dl, keywords)
+                val adapterObj = AdapterAppList(requireContext(), dl, keywords)
                 val adapterAppList: WeakReference<AdapterAppList> = WeakReference(adapterObj)
                 lv.adapter = adapterObj
                 lv.onItemClickListener = OnItemClickListener { list, itemView, postion, _ ->
@@ -142,6 +157,9 @@ class FragmentAppUser(private val myHandler: Handler) : androidx.fragment.app.Fr
     }
 
     override fun onDestroyView() {
+        viewScope?.cancel()
+        viewScope = null
+        processBarDialog.hideDialog()
         super.onDestroyView()
         _binding = null
     }

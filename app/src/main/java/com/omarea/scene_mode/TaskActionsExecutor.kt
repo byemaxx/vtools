@@ -53,48 +53,52 @@ class TaskActionsExecutor(
         mWakeLock = mPowerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "scene:TaskActionsExecutor");
         mWakeLock.acquire(600 * 1000) // 默认限制10分钟
 
-        taskActions?.forEach {
-            try {
-                when (it) {
-                    TaskAction.FSTRIM -> {
-                        updateNotification("Executing fstrim")
-                        FstrimUtils(keepShell).run()
+        try {
+            taskActions?.forEach {
+                try {
+                    when (it) {
+                        TaskAction.FSTRIM -> {
+                            updateNotification("Executing fstrim")
+                            FstrimUtils(keepShell).run()
+                        }
+                        TaskAction.STANDBY_MODE_OFF -> {
+                            updateNotification("Turn off standby mode")
+                            SceneStandbyMode(context, keepShell).off()
+                        }
+                        TaskAction.STANDBY_MODE_ON -> {
+                            updateNotification("Turn on standby mode")
+                            SceneStandbyMode(context, keepShell).on()
+                        }
+                        TaskAction.ZEN_MODE_ON -> {
+                            updateNotification("Turn on Do Not Disturb mode")
+                            ZenModeUtils(context).on()
+                        }
+                        TaskAction.ZEN_MODE_OFF -> {
+                            updateNotification("Turn off Do Not Disturb mode")
+                            ZenModeUtils(context).off()
+                        }
+                        else -> {
+                        }
                     }
-                    TaskAction.STANDBY_MODE_OFF -> {
-                        updateNotification("Turn off standby mode")
-                        SceneStandbyMode(context, keepShell).off()
-                    }
-                    TaskAction.STANDBY_MODE_ON -> {
-                        updateNotification("Turn on standby mode")
-                        SceneStandbyMode(context, keepShell).on()
-                    }
-                    TaskAction.ZEN_MODE_ON -> {
-                        updateNotification("Turn on Do Not Disturb mode")
-                        ZenModeUtils(context).on()
-                    }
-                    TaskAction.ZEN_MODE_OFF -> {
-                        updateNotification("Turn off Do Not Disturb mode")
-                        ZenModeUtils(context).off()
-                    }
-                    else -> {
-                    }
+                } catch (ex: Exception) {
+                    Toast.makeText(context, "Timed task error：" + ex.message, Toast.LENGTH_LONG).show()
                 }
-            } catch (ex: Exception) {
-                Toast.makeText(context, "Timed task error：" + ex.message, Toast.LENGTH_LONG).show()
+            }
+
+            customTaskActions?.forEach {
+                updateNotification(it.Name)
+                keepShell.doCmdSync(it.Command)
+            }
+
+        } finally {
+            try {
+                if (!isCommonShell) currentShell?.tryExit()
+            } finally {
+                try { hideNotification() } finally {
+                    if (mWakeLock.isHeld) mWakeLock.release()
+                }
             }
         }
-
-        customTaskActions?.forEach {
-            updateNotification(it.Name)
-            keepShell.doCmdSync(it.Command)
-        }
-
-        if (!isCommonShell) {
-            currentShell?.tryExit()
-        }
-        hideNotification()
-
-        mWakeLock.release()
     }
 
     private fun speedDex2oatCompile() {

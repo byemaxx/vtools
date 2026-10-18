@@ -1,5 +1,8 @@
 package com.omarea.vtools.fragments
 
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.cancel
+
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
@@ -95,7 +98,7 @@ class FragmentCpuModes : Fragment() {
     }
 
     private fun startService() {
-        AccessibleServiceHelper().stopSceneModeService(activity!!.applicationContext)
+        AccessibleServiceHelper().stopSceneModeService(requireActivity().applicationContext)
         Scene.toast(getString(R.string.accessibility_please_activate), Toast.LENGTH_SHORT)
         try {
             val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
@@ -104,12 +107,15 @@ class FragmentCpuModes : Fragment() {
         }
     }
 
+    private var importScope: kotlinx.coroutines.CoroutineScope? = null
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        importScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main + kotlinx.coroutines.SupervisorJob())
         super.onViewCreated(view, savedInstanceState)
         if (!::themeMode.isInitialized) {
             themeMode = (activity as? ActivityBase)?.themeMode ?: ThemeMode()
         }
-        globalSPF = context!!.getSharedPreferences(SpfConfig.GLOBAL_SPF, Context.MODE_PRIVATE)
+        globalSPF = requireContext().getSharedPreferences(SpfConfig.GLOBAL_SPF, Context.MODE_PRIVATE)
         modeSwitcher = ModeSwitcher()
         contentBinding = FragmentCpuModesContentBinding.inflate(layoutInflater)
         val content = contentBinding!!
@@ -149,8 +155,8 @@ class FragmentCpuModes : Fragment() {
             val value = (it as Switch).isChecked
             if (value && !(modeSwitcher.modeConfigCompleted())) {
                 it.isChecked = false
-                DialogHelper.alert(context!!, getString(R.string.sorry), getString(R.string.schedule_unfinished))
-            } else if (value && !AccessibleServiceHelper().serviceRunning(context!!)) {
+                DialogHelper.alert(requireContext(), getString(R.string.sorry), getString(R.string.schedule_unfinished))
+            } else if (value && !AccessibleServiceHelper().serviceRunning(requireContext())) {
                 it.isChecked = false
                 startService()
             } else {
@@ -165,9 +171,9 @@ class FragmentCpuModes : Fragment() {
         content.dynamicControlToggle.setOnClickListener {
             content.dynamicControlOpts2.toggleExpand()
             if (content.dynamicControlOpts2.isExpand) {
-                (it as ImageView).setImageDrawable(ContextCompat.getDrawable(context!!, R.drawable.arrow_up))
+                (it as ImageView).setImageDrawable(ContextCompat.getDrawable(requireContext(), R.drawable.arrow_up))
             } else {
-                (it as ImageView).setImageDrawable(ContextCompat.getDrawable(context!!, R.drawable.arrow_down))
+                (it as ImageView).setImageDrawable(ContextCompat.getDrawable(requireContext(), R.drawable.arrow_down))
             }
         }
 
@@ -211,9 +217,9 @@ class FragmentCpuModes : Fragment() {
         val sourceClick = object : View.OnClickListener {
             override fun onClick(it: View) {
                 if (configInstaller.outsideConfigInstalled()) {
-                    if (configInstaller.dynamicSupport(context!!)) {
+                    if (configInstaller.dynamicSupport(requireContext())) {
                         DialogHelper.warning(
-                            activity!!,
+                            requireActivity(),
                             getString(R.string.make_choice),
                             getString(R.string.schedule_remove_outside),
                             {
@@ -225,7 +231,7 @@ class FragmentCpuModes : Fragment() {
                     } else {
                         Scene.toast(getString(R.string.schedule_unofficial), Toast.LENGTH_LONG)
                     }
-                } else if (configInstaller.dynamicSupport(context!!)) {
+                } else if (configInstaller.dynamicSupport(requireContext())) {
                     chooseConfigSource()
                 } else {
                     Scene.toast(getString(R.string.schedule_unsupported), Toast.LENGTH_LONG)
@@ -240,14 +246,14 @@ class FragmentCpuModes : Fragment() {
             startActivity(intent)
         }
         content.navAppScene.setOnClickListener {
-            if (!AccessibleServiceHelper().serviceRunning(context!!)) {
+            if (!AccessibleServiceHelper().serviceRunning(requireContext())) {
                 startService()
             } else if (content.dynamicControl.isChecked) {
                 val intent = Intent(context, ActivityAppConfig2::class.java)
                 startActivity(intent)
             } else {
                 DialogHelper.warning(
-                        activity!!,
+                        requireActivity(),
                         getString(R.string.please_notice),
                         getString(R.string.schedule_dynamic_off), {
                     val intent = Intent(context, ActivityAppConfig2::class.java)
@@ -261,7 +267,7 @@ class FragmentCpuModes : Fragment() {
         }
         // 自动跳过广告
         content.navSkipAd.setOnClickListener {
-            if (AccessibleServiceHelper().serviceRunning(context!!)) {
+            if (AccessibleServiceHelper().serviceRunning(requireContext())) {
                 val intent = Intent(context, ActivityAutoClick::class.java)
                 startActivity(intent)
             } else {
@@ -276,7 +282,7 @@ class FragmentCpuModes : Fragment() {
                         title = "MIUI only"
                         pageConfigPath = "file:///android_asset/kr-script/miui/miui.xml"
                     }
-                    OpenPageHelper(activity!!).openPage(pageNode)
+                    OpenPageHelper(requireActivity()).openPage(pageNode)
                 }
             } else {
                 content.navThermal.visibility = View.GONE
@@ -287,7 +293,7 @@ class FragmentCpuModes : Fragment() {
                 startActivity(intent)
             }
             content.navFreeze.setOnClickListener {
-                if (AccessibleServiceHelper().serviceRunning(context!!)) {
+                if (AccessibleServiceHelper().serviceRunning(requireContext())) {
                     val intent = Intent(Intent.ACTION_VIEW)
                     intent.setClassName(
                         "com.omarea.vtools", "com.omarea.vtools.activities.ActivityFreezeApps2"
@@ -299,7 +305,7 @@ class FragmentCpuModes : Fragment() {
             }
         }
 
-        if (!modeSwitcher.modeConfigCompleted() && configInstaller.dynamicSupport(context!!)) {
+        if (!modeSwitcher.modeConfigCompleted() && configInstaller.dynamicSupport(requireContext())) {
             installConfig(false)
         }
         // 卓越性能 目前仅限888处理器开放
@@ -317,13 +323,13 @@ class FragmentCpuModes : Fragment() {
     // 选择配置来源
     private fun chooseConfigSource() {
         val view = layoutInflater.inflate(R.layout.dialog_powercfg_source, null)
-        val dialog = DialogHelper.customDialog(activity!!, view)
+        val dialog = DialogHelper.customDialog(requireActivity(), view)
 
         val conservative = view.findViewById<View>(R.id.source_official_conservative)
         val active = view.findViewById<View>(R.id.source_official_active)
 
         val cpuConfigInstaller = CpuConfigInstaller()
-        if (cpuConfigInstaller.dynamicSupport(context!!)) {
+        if (cpuConfigInstaller.dynamicSupport(requireContext())) {
             conservative.setOnClickListener {
                 if (configInstaller.outsideConfigInstalled()) {
                     configInstaller.removeOutsideConfig()
@@ -428,16 +434,16 @@ class FragmentCpuModes : Fragment() {
             val binding = contentBinding ?: return@setOnClickListener
             if (mode == ModeSwitcher.FAST && ModeSwitcher.getCurrentSource() == ModeSwitcher.SOURCE_OUTSIDE_UPERF) {
                 DialogHelper.warning(
-                        activity!!,
+                        requireActivity(),
                         getString(R.string.please_notice),
                         getString(R.string.schedule_uperf_fast),
                         {
-                            modeSwitcher.executePowercfgMode(mode, context!!.packageName)
+                            modeSwitcher.executePowercfgMode(mode, requireContext().packageName)
                             updateState(binding.cpuConfigP3, ModeSwitcher.FAST)
                         }
                 )
             } else {
-                modeSwitcher.executePowercfgMode(mode, context!!.packageName)
+                modeSwitcher.executePowercfgMode(mode, requireContext().packageName)
                 updateState(binding.cpuConfigP0, ModeSwitcher.POWERSAVE)
                 updateState(binding.cpuConfigP1, ModeSwitcher.BALANCE)
                 updateState(binding.cpuConfigP2, ModeSwitcher.PERFORMANCE)
@@ -458,7 +464,7 @@ class FragmentCpuModes : Fragment() {
         updateState(viewBinding.cpuConfigP1, ModeSwitcher.BALANCE)
         updateState(viewBinding.cpuConfigP2, ModeSwitcher.PERFORMANCE)
         updateState(viewBinding.cpuConfigP3, ModeSwitcher.FAST)
-        val serviceState = AccessibleServiceHelper().serviceRunning(context!!)
+        val serviceState = AccessibleServiceHelper().serviceRunning(requireContext())
         val dynamicControl = globalSPF.getBoolean(SpfConfig.GLOBAL_SPF_DYNAMIC_CONTROL, SpfConfig.GLOBAL_SPF_DYNAMIC_CONTROL_DEFAULT)
         viewBinding.dynamicControl.isChecked = dynamicControl && serviceState
         val serviceNoticeVisible = if (serviceState) View.GONE else View.VISIBLE
@@ -508,15 +514,17 @@ class FragmentCpuModes : Fragment() {
         val context = context ?: return@registerForActivityResult
         // 安卓原生文件选择器
         if (Build.VERSION.SDK_INT >= 30 && !useInnerFileChooser) {
-            val absPath = FilePathResolver().getPath(activity, data.data)
-            if (absPath != null) {
-                if (absPath.endsWith(".sh")) {
-                    installLocalConfig(absPath)
+            importScope?.launch {
+                val absPath = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { FilePathResolver().getPath(context.applicationContext, data.data) }
+                if (absPath != null) {
+                    if (absPath.endsWith(".sh")) {
+                        installLocalConfig(absPath)
+                    } else {
+                        Toast.makeText(context, "Invalid file (should be a .sh file)!", Toast.LENGTH_SHORT).show()
+                    }
                 } else {
-                    Toast.makeText(context, "Invalid file (should be a .sh file)!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Selected file not found!", Toast.LENGTH_SHORT).show()
                 }
-            } else {
-                Toast.makeText(context, "Selected file not found!", Toast.LENGTH_SHORT).show()
             }
         } else { // Scene内置文件选择器
             if (data.extras?.containsKey("file") != true) {
@@ -558,7 +566,7 @@ class FragmentCpuModes : Fragment() {
         if (file.canRead()) {
             return file.readText(Charset.defaultCharset()).trimStart().replace("\r", "")
         } else {
-            val innerPath = FileWrite.getPrivateFilePath(context!!, "powercfg.tmp")
+            val innerPath = FileWrite.getPrivateFilePath(requireContext(), "powercfg.tmp")
             KeepShellPublic.doCmdSync("cp \"${file.absolutePath}\" \"$innerPath\"\nchmod 777 \"$innerPath\"")
             val tmpFile = File(innerPath)
             if (tmpFile.exists() && tmpFile.canRead()) {
@@ -571,7 +579,7 @@ class FragmentCpuModes : Fragment() {
     }
 
     private fun getOnlineConfig() {
-        DialogHelper.alert(this.activity!!,
+        DialogHelper.alert(this.requireActivity(),
                 "Notice",
                 "Scene no longer provides online config scripts. If needed, use the optimization module by \"yc9559\" and flash it with Magisk, then reboot to use scheduling switches in Scene.") {
             openUrl("https://github.com/yc9559/uperf")
@@ -618,7 +626,7 @@ class FragmentCpuModes : Fragment() {
             }
             val configStar = lines.split("\n").firstOrNull()
             if (configStar != null && (configStar.startsWith("#!/") || lines.contains("echo "))) {
-                if (configInstaller.installCustomConfig(context!!, lines, ModeSwitcher.SOURCE_SCENE_IMPORT)) {
+                if (configInstaller.installCustomConfig(requireContext(), lines, ModeSwitcher.SOURCE_SCENE_IMPORT)) {
                     configInstalled()
                 } else {
                     Toast.makeText(context, "Failed to install config script. Please retry.", Toast.LENGTH_LONG).show()
@@ -633,12 +641,12 @@ class FragmentCpuModes : Fragment() {
 
     //安装调频文件
     private fun installConfig(active: Boolean) {
-        if (!configInstaller.dynamicSupport(context!!)) {
+        if (!configInstaller.dynamicSupport(requireContext())) {
             Scene.toast(R.string.not_support_config, Toast.LENGTH_LONG)
             return
         }
 
-        configInstaller.installOfficialConfig(context!!, "", active)
+        configInstaller.installOfficialConfig(requireContext(), "", active)
         configInstalled()
     }
 
@@ -649,7 +657,7 @@ class FragmentCpuModes : Fragment() {
 
     private fun outsideOverrode(): Boolean {
         if (configInstaller.outsideConfigInstalled()) {
-            DialogHelper.helpInfo(activity!!, "You need to delete the external config first because Scene will prioritize it.")
+            DialogHelper.helpInfo(requireActivity(), "You need to delete the external config first because Scene will prioritize it.")
             return true
         }
         return false
@@ -668,6 +676,8 @@ class FragmentCpuModes : Fragment() {
     }
 
     override fun onDestroyView() {
+        importScope?.cancel()
+        importScope = null
         super.onDestroyView()
         _binding = null
         contentBinding = null
