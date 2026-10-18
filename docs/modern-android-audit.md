@@ -1,0 +1,54 @@
+# 现代 Android 适配检查
+
+检查基线：`27c984bc`，即本轮开始时先保存的功率监测功能提交。
+范围：公共页面布局、主题、安全区域、键盘、页面退出开销，以及定时任务、外部入口和在线脚本的定向源码检查。不是全仓库安全审计。
+
+## 本轮修复
+
+| 问题 | 依据 | 修复 |
+| --- | --- | --- |
+| 顶部标题和状态栏重叠 | ThemeSwitch 调用边到边显示，但基础页面没有统一处理 insets。实机历史页 toolbar 从 y=0 开始，状态栏实际占 160 px。 | ActivityBase 在内容装入后统一处理系统栏、刘海和键盘留白，按原始 padding 计算，不累加。 |
+| 首页与其他页面使用不同留白规则 | 首页仅给 tabBar 单独添加顶部留白；深浅主题的窗口行为也不一致。 | 移除首页重复补偿，基础页面统一窗口布局和系统栏图标风格；保留悬浮窗独立布局。 |
+| 历史报表只有标题，正文不可见 | 公共 layout_app_bar 的根容器高度为 match_parent；未覆盖 include 高度的纵向页面被标题区域占满。 | 公共标题区域改为 wrap_content。 |
+| 底部与键盘区域未统一保护 | 页面混用 fitsSystemWindows 和手动标志，缺少一致规则。 | 内容容器统一避开导航栏、显示缺口和 IME，下层不重复消费同一留白。 |
+| 页面退出后额外触发 GC 和 root 诊断 | ActivityBase.onDestroy 定时执行 System.gc()，任务根页面还运行 dumpsys meminfo 并丢弃结果。 | 删除这段退出副作用。未测量耗电或性能收益百分比。 |
+
+统一入口覆盖 29 个 ActivityBase 子页面；不代表 29 页均已实测。
+
+## 实机验证
+
+设备 CPH2655，Android 16，竖屏、当前浅色主题与手势导航。
+
+- 充电、设置、FPS、功率历史页：toolbar 顶部均为 160 px，与系统状态栏安全区域一致。
+- 布局断言检查这些页面可见、可点击控件没有进入状态栏或底部导航栏。
+- 历史报表页：修改前仅标题可见；修改后会话选择、曲线和统计内容可见。
+- 自定义命令编辑页：仅聚焦空文本框，不输入、保存或运行命令；输入区域和保存按钮在键盘上方。
+- `scripts/check_ui_insets.py` 对保存的页面层级与窗口区域执行断言，已通过。
+- 调试构建通过，并保留数据覆盖安装。没有手动重启服务或更改无障碍、主题、旋转等系统设置。
+
+截图、布局与窗口输出位于 `build/ui-audit/`，不提交个人设备运行资料。
+未验证横屏、深色／壁纸主题、三键导航、旧版 Android、分屏，以及未打开的页面。
+布局抓取期间出现过辅助服务关闭 Toast；不能据此把它判定为应用自身崩溃，未对服务进行干预。
+
+## 下一批应优先处理的问题
+
+以下均为源码发现。本轮只修复上述公共 UI 问题，下面的运行逻辑尚未修改，也未执行危险任务来复现。
+
+| 优先级 | 问题与证据 | 建议修复 |
+| --- | --- | --- |
+| P1 | `krscript/.../WebViewInjector.java:55–69,124`：credible=false 仅影响文件访问，仍注入带 executeShell 的 KrScriptCore；执行方法直接进入 root 脚本环境。 | 明确区分可信本地插件与在线页面；限制来源／跳转／子框架，远程脚本执行加入清晰授权，避免把普通网页直接交给高权限桥接。需兼顾现有在线插件功能。 |
+| P1 | `SceneFreezeProvider.kt:63–64`：导出的 Provider 用 ContentValues 中调用者自报的 source 判定白名单。 | 用 Binder 调用 UID 与包身份验证，校验目标包名；保留用户明确启用的 Xposed 接口契约。 |
+| P1 | `SceneTaskIntentService.kt:53–68`：过期任务设置 disabled 后没有提前返回，后面仍可进入动作执行；入口也没有首先拒绝原本已禁用的任务。 | 执行入口统一拒绝禁用／过期任务，持久化状态并退出；同时限制外部服务触发。用不执行系统动作的单元测试覆盖边界。 |
+| P1 | `TimingTaskManager.kt:23,44`：PendingIntent 缺少可变性标志；精准闹钟缺少权限声明和 canScheduleExactAlarms 检查。 | 明确使用 immutable PendingIntent；补齐特权授权入口及未授权时的说明，不能静默改为不准时的任务。 |
+| P2 | `ActivityStartSplash.kt:160`、文件选择路径：仍依赖旧 READ/WRITE_EXTERNAL_STORAGE 和绝对路径。 | 分开处理 SAF、普通文件和已获授权的 root 路径；不要把旧存储权限当成现代 Android 的可读性保证。 |
+| P2 | `ActivityAppRetrieve.kt:76–78` 等页面：Main 协程中读取应用列表；多处使用 GlobalScope，部分 root／数据库查询位于 UI 路径。 | 逐页把阻塞 I/O 移到后台，绑定页面生命周期；服务长期任务保留自己的生命周期，避免机械替换。 |
+| P2 | 大量旧页面使用固定高度、过小点击区域、硬编码英文；自定义命令的 Test runs 仍只显示未实现。 | 按大字体、横屏和小屏检查关键页面；未实现按钮应明确标识或移除，统一字符串资源与无障碍描述。 |
+
+推荐顺序：先处理高权限入口和任务执行保护，再做权限流程与页面异步 I/O，最后逐页改善布局和文案。
+不建议同时提高 targetSdk、重写主题系统和替换全部旧页面，否则难以定位兼容性回归。
+
+## 官方对照
+
+- [系统栏、刘海和边到边布局](https://developer.android.com/develop/ui/views/layout/edge-to-edge)
+- [Android 12：PendingIntent 可变性与精准闹钟权限](https://developer.android.com/about/versions/12/behavior-changes-12)
+- [WebView 原生桥接的信任边界](https://developer.android.com/privacy-and-security/risks/insecure-webview-native-bridges)

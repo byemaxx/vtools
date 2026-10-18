@@ -4,10 +4,31 @@ import android.graphics.Point
 import android.os.Build
 import android.view.WindowManager
 import android.view.Window
+import android.view.View
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.omarea.vtools.R
+import kotlin.math.max
 
 object WindowCompatHelper {
+    fun insetActivityContent(window: Window, content: View) {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        val padding = content.getTag(R.id.system_inset_padding) as? IntArray
+            ?: intArrayOf(content.paddingLeft, content.paddingTop, content.paddingRight, content.paddingBottom)
+                .also { content.setTag(R.id.system_inset_padding, it) }
+        ViewCompat.setOnApplyWindowInsetsListener(content) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            val keyboard = insets.getInsets(WindowInsetsCompat.Type.ime())
+            view.setPadding(padding[0] + bars.left, padding[1] + bars.top,
+                padding[2] + bars.right, padding[3] + max(bars.bottom, keyboard.bottom))
+            // The content container owns these insets; legacy fitsSystemWindows children must not add them again.
+            WindowInsetsCompat.CONSUMED
+        }
+        ViewCompat.requestApplyInsets(content)
+    }
+
     fun getRealDisplaySize(windowManager: WindowManager): Point {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val bounds = windowManager.currentWindowMetrics.bounds

@@ -10,8 +10,7 @@ import android.os.PersistableBundle
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
-import com.omarea.Scene
-import com.omarea.common.shell.KeepShellPublic
+import com.omarea.utils.WindowCompatHelper
 import com.omarea.common.ui.ThemeMode
 import com.omarea.store.SpfConfig
 import com.omarea.vtools.R
@@ -27,6 +26,7 @@ open class ActivityBase : AppCompatActivity() {
         super.onCreate(savedInstanceState, persistentState)
 
         this.themeMode = ThemeSwitch.switchTheme(this)
+        WindowCompatHelper.applyEdgeToEdge(window, !themeMode.isDarkMode, !themeMode.isDarkMode)
         lastUiMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         lastThemePref = themePrefs.getInt(SpfConfig.GLOBAL_SPF_THEME, -1)
     }
@@ -35,6 +35,7 @@ open class ActivityBase : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         this.themeMode = ThemeSwitch.switchTheme(this)
+        WindowCompatHelper.applyEdgeToEdge(window, !themeMode.isDarkMode, !themeMode.isDarkMode)
         lastUiMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         lastThemePref = themePrefs.getInt(SpfConfig.GLOBAL_SPF_THEME, -1)
     }
@@ -81,15 +82,10 @@ open class ActivityBase : AppCompatActivity() {
         }
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        Scene.postDelayed({
-            System.gc()
-        }, 500)
-        if (isTaskRoot) {
-            Scene.postDelayed({
-                KeepShellPublic.doCmdSync("dumpsys meminfo " + context.packageName + " > /dev/null")
-            }, 100)
+    override fun onContentChanged() {
+        super.onContentChanged()
+        findViewById<View>(android.R.id.content)?.let {
+            WindowCompatHelper.insetActivityContent(window, it)
         }
     }
 
