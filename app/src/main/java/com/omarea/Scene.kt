@@ -111,6 +111,7 @@ class Scene : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        com.omarea.utils.LeakCanaryIcon.apply(this)
     }
 
     override fun attachBaseContext(base: Context?) {

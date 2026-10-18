@@ -43,6 +43,8 @@ public class SpfConfig {
     public static String ON = "_on";
     public static String OFF = "_off";
 
+    public static final String GLOBAL_SPF_AUTO_ACCESSIBILITY = "auto_accessibility_root";
+    public static final String GLOBAL_SPF_LEAK_ICON = "leak_launcher_icon";
     public static String GLOBAL_SPF = "global"; //spf
     public static String GLOBAL_SPF_AUTO_INSTALL = "is_auto_install";
     public static String GLOBAL_SPF_HELP_ICON = "show_help_icon";

@@ -163,7 +163,7 @@ class ActivityStartSplash : Activity() {
             if (hasRoot) {
                 GeneralPermissions(activity).grantPermissions()
                 val serviceHelper = AccessibleServiceHelper()
-                if (!serviceHelper.serviceRunning(activity)) {
+                if (globalSPF.getBoolean(SpfConfig.GLOBAL_SPF_AUTO_ACCESSIBILITY, false) && !serviceHelper.serviceRunning(activity)) {
                     serviceHelper.startSceneModeService(activity)
                 }
             }

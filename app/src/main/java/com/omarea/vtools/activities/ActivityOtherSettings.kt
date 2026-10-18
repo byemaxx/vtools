@@ -39,6 +39,17 @@ class ActivityOtherSettings : ActivityBase() {
 
         setBackArrow()
 
+        binding.settingsAutoAccessibility.isChecked = spf.getBoolean(SpfConfig.GLOBAL_SPF_AUTO_ACCESSIBILITY, false)
+        binding.settingsAutoAccessibility.setOnClickListener {
+            spf.edit().putBoolean(SpfConfig.GLOBAL_SPF_AUTO_ACCESSIBILITY, binding.settingsAutoAccessibility.isChecked).apply()
+        }
+        binding.settingsLeakIconCard.visibility = if (com.omarea.utils.LeakCanaryIcon.isAvailable(this)) View.VISIBLE else View.GONE
+        binding.settingsLeakIcon.isChecked = spf.getBoolean(SpfConfig.GLOBAL_SPF_LEAK_ICON, false)
+        binding.settingsLeakIcon.setOnClickListener {
+            spf.edit().putBoolean(SpfConfig.GLOBAL_SPF_LEAK_ICON, binding.settingsLeakIcon.isChecked).apply()
+            com.omarea.utils.LeakCanaryIcon.apply(this)
+        }
+
         binding.settingsDisableSelinux.setOnClickListener {
             if (binding.settingsDisableSelinux.isChecked) {
                 KeepShellPublic.doCmdSync(CommonCmds.DisableSELinux)

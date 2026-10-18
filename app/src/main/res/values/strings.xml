@@ -961,4 +961,8 @@
     <string name="task_exact_alarm_required">Allow alarms and reminders in system settings, then return and save the task again.</string>
     <string name="app_list_load_failed">Unable to load applications. Please try again.</string>
     <string name="task_save_failed">Unable to save the task. Check available storage and try again.</string>
+    <string name="settings_auto_accessibility">Auto-enable accessibility with root</string>
+    <string name="settings_auto_accessibility_desc">Off by default. When enabled, starting Scene with root can enable its accessibility service. Turning this off does not stop an already enabled service.</string>
+    <string name="settings_leak_icon">Show LeakCanary launcher icon</string>
+    <string name="settings_leak_icon_desc">Off by default. Show the memory leak report icon in the launcher. This controls the icon only; memory leak detection remains active in debug builds.</string>
 </resources>
