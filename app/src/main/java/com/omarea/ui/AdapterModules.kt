@@ -85,7 +85,7 @@ class AdapterModules(private val context: Context, private val list: ArrayList<S
         val convertView = LayoutInflater.from(context).inflate(R.layout.list_item_module, parent, false)
         val viewHolder = ViewHolder(convertView)
         viewHolder.itemTitle = convertView.findViewById(R.id.ItemTitle)
-        viewHolder.itemDesc = convertView.findViewById(R.id.ItemDesc)
+        viewHolder.itemDesc = convertView.findViewById(R.id.ItemText)
         viewHolder.itemSource = convertView.findViewById(R.id.ItemSource)
         viewHolder.itemButton = convertView.findViewById(R.id.download)
 

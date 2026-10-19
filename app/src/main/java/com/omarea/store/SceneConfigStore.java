@@ -22,7 +22,7 @@ public class SceneConfigStore extends SQLiteOpenHelper {
     }
 
     @Override
-    public void onCreate(SQLiteDatabase db) {
+    public synchronized void onCreate(SQLiteDatabase db) {
         try {
             db.execSQL(
                 "create table scene_config3(" +
@@ -48,90 +48,91 @@ public class SceneConfigStore extends SQLiteOpenHelper {
                     1
                 });
             }
-        } catch (Exception e) {
+        } catch (Exception error) {
+            android.util.Log.e("SceneConfigStore", "Database operation failed", error);
         }
     }
 
     @Override
-    public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+    public synchronized void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         if (oldVersion < 3) {
             // 屏幕方向
             try {
                 db.execSQL("alter table scene_config3 add column screen_orientation int default(-1)");
-            } catch (Exception ignored) {
-            }
+            } catch (Exception error) {
+            android.util.Log.e("SceneConfigStore", "Database operation failed", error);
+        }
         }
 
         if (oldVersion < 4) {
             try {
                 db.execSQL("alter table scene_config3 add column fg_cgroup_mem text default('')");
                 db.execSQL("alter table scene_config3 add column bg_cgroup_mem text default('')");
-            } catch (Exception ignored) {
-            }
+            } catch (Exception error) {
+            android.util.Log.e("SceneConfigStore", "Database operation failed", error);
+        }
         }
 
         if (oldVersion < 5) {
             try {
                 db.execSQL("alter table scene_config3 add column dynamic_boost_mem text default(0)");
-            } catch (Exception ignored) {
-            }
+            } catch (Exception error) {
+            android.util.Log.e("SceneConfigStore", "Database operation failed", error);
+        }
         }
 
         if (oldVersion < 6) {
             try {
                 db.execSQL("alter table scene_config3 add column show_monitor text default(0)");
-            } catch (Exception ignored) {
-            }
+            } catch (Exception error) {
+            android.util.Log.e("SceneConfigStore", "Database operation failed", error);
+        }
         }
     }
 
-    public ArrayList<SceneConfigInfo> queryAppConfig(String selection, String[] selectionArgs) {
+    public synchronized ArrayList<SceneConfigInfo> queryAppConfig(String selection, String[] selectionArgs) {
         ArrayList<SceneConfigInfo> configInfoList = new ArrayList<>();
-        try {
-            SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
-            Cursor cursor = sqLiteDatabase.query(
+        try (SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
+             Cursor cursor = sqLiteDatabase.query(
                 "scene_config3", new String[]{ "*" }, selection, selectionArgs, null, null, null
-            );
+            )) {
             while (cursor.moveToNext()) {
                 configInfoList.add(getAppConfig(cursor));
             }
-            cursor.close();
-            sqLiteDatabase.close();
-        } catch (Exception ignored) {
+        } catch (Exception error) {
+            android.util.Log.e("SceneConfigStore", "Database operation failed", error);
         }
         return configInfoList;
     }
 
 
-    public SceneConfigInfo getAppConfig(Cursor cursor) {
+    public synchronized SceneConfigInfo getAppConfig(Cursor cursor) {
         SceneConfigInfo sceneConfigInfo = new SceneConfigInfo();
-        sceneConfigInfo.packageName = cursor.getString(cursor.getColumnIndex("id"));
-        sceneConfigInfo.aloneLight = cursor.getInt(cursor.getColumnIndex("alone_light")) == 1;
-        sceneConfigInfo.aloneLightValue = cursor.getInt(cursor.getColumnIndex("light"));
-        sceneConfigInfo.disNotice = cursor.getInt(cursor.getColumnIndex("dis_notice")) == 1;
-        sceneConfigInfo.disButton = cursor.getInt(cursor.getColumnIndex("dis_button")) == 1;
-        sceneConfigInfo.gpsOn = cursor.getInt(cursor.getColumnIndex("gps_on")) == 1;
-        sceneConfigInfo.freeze = cursor.getInt(cursor.getColumnIndex("freeze")) == 1;
-        sceneConfigInfo.screenOrientation = cursor.getInt(cursor.getColumnIndex("screen_orientation"));
-        sceneConfigInfo.fgCGroupMem = cursor.getString(cursor.getColumnIndex("fg_cgroup_mem"));
-        sceneConfigInfo.bgCGroupMem = cursor.getString(cursor.getColumnIndex("bg_cgroup_mem"));
-        sceneConfigInfo.dynamicBoostMem = cursor.getInt(cursor.getColumnIndex("dynamic_boost_mem")) == 1;
-        sceneConfigInfo.showMonitor = cursor.getInt(cursor.getColumnIndex("show_monitor")) == 1;
+        sceneConfigInfo.packageName = cursor.getString(cursor.getColumnIndexOrThrow("id"));
+        sceneConfigInfo.aloneLight = cursor.getInt(cursor.getColumnIndexOrThrow("alone_light")) == 1;
+        sceneConfigInfo.aloneLightValue = cursor.getInt(cursor.getColumnIndexOrThrow("light"));
+        sceneConfigInfo.disNotice = cursor.getInt(cursor.getColumnIndexOrThrow("dis_notice")) == 1;
+        sceneConfigInfo.disButton = cursor.getInt(cursor.getColumnIndexOrThrow("dis_button")) == 1;
+        sceneConfigInfo.gpsOn = cursor.getInt(cursor.getColumnIndexOrThrow("gps_on")) == 1;
+        sceneConfigInfo.freeze = cursor.getInt(cursor.getColumnIndexOrThrow("freeze")) == 1;
+        sceneConfigInfo.screenOrientation = cursor.getInt(cursor.getColumnIndexOrThrow("screen_orientation"));
+        sceneConfigInfo.fgCGroupMem = cursor.getString(cursor.getColumnIndexOrThrow("fg_cgroup_mem"));
+        sceneConfigInfo.bgCGroupMem = cursor.getString(cursor.getColumnIndexOrThrow("bg_cgroup_mem"));
+        sceneConfigInfo.dynamicBoostMem = cursor.getInt(cursor.getColumnIndexOrThrow("dynamic_boost_mem")) == 1;
+        sceneConfigInfo.showMonitor = cursor.getInt(cursor.getColumnIndexOrThrow("show_monitor")) == 1;
 
         return sceneConfigInfo;
     }
 
-    public SceneConfigInfo getAppConfig(String app) {
+    public synchronized SceneConfigInfo getAppConfig(String app) {
         SceneConfigInfo sceneConfigInfo = null;
-        try {
-            SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
-            Cursor cursor = sqLiteDatabase.rawQuery("select * from scene_config3 where id = ?", new String[]{app});
+        try (SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
+             Cursor cursor = sqLiteDatabase.rawQuery("select * from scene_config3 where id = ?", new String[]{app})) {
             if (cursor.moveToNext()) {
                 sceneConfigInfo = getAppConfig(cursor);
             }
-            cursor.close();
-            sqLiteDatabase.close();
-        } catch (Exception ignored) {
+        } catch (Exception error) {
+            android.util.Log.e("SceneConfigStore", "Database operation failed", error);
         } finally {
             if (sceneConfigInfo == null) {
                 sceneConfigInfo = new SceneConfigInfo();
@@ -141,7 +142,7 @@ public class SceneConfigStore extends SQLiteOpenHelper {
         return sceneConfigInfo;
     }
 
-    public boolean setAppConfig(SceneConfigInfo sceneConfigInfo) {
+    public synchronized boolean setAppConfig(SceneConfigInfo sceneConfigInfo) {
         SQLiteDatabase database = getWritableDatabase();
         getWritableDatabase().beginTransaction();
         try {
@@ -163,13 +164,14 @@ public class SceneConfigStore extends SQLiteOpenHelper {
             database.setTransactionSuccessful();
             return true;
         } catch (Exception ex) {
+            android.util.Log.e("SceneConfigStore", "Database write failed", ex);
             return false;
         } finally {
             database.endTransaction();
         }
     }
 
-    public boolean resetAll() {
+    public synchronized boolean resetAll() {
         try {
             SQLiteDatabase database = getWritableDatabase();
             database.execSQL("update scene_config3 set alone_light = 0, fg_cgroup_mem = '', screen_orientation = ?, bg_cgroup_mem = '', dynamic_boost_mem = 0, show_monitor = 0", new Object[]{
@@ -177,31 +179,31 @@ public class SceneConfigStore extends SQLiteOpenHelper {
             });
             return true;
         } catch (Exception ex) {
+            android.util.Log.e("SceneConfigStore", "Database write failed", ex);
             return false;
         }
     }
 
-    public boolean removeAppConfig(String packageName) {
+    public synchronized boolean removeAppConfig(String packageName) {
         try {
             SQLiteDatabase database = getWritableDatabase();
             database.execSQL("delete from scene_config3 where id = ?", new String[]{packageName});
             return true;
         } catch (Exception ex) {
+            android.util.Log.e("SceneConfigStore", "Database write failed", ex);
             return false;
         }
     }
 
-    public ArrayList<String> getFreezeAppList() {
+    public synchronized ArrayList<String> getFreezeAppList() {
         ArrayList<String> list = new ArrayList<String>();
-        try {
-            SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
-            Cursor cursor = sqLiteDatabase.rawQuery("select * from scene_config3 where freeze == 1", null);
+        try (SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
+             Cursor cursor = sqLiteDatabase.rawQuery("select * from scene_config3 where freeze == 1", null)) {
             while (cursor.moveToNext()) {
                 list.add(cursor.getString(0));
             }
-            cursor.close();
-            sqLiteDatabase.close();
-        } catch (Exception ignored) {
+        } catch (Exception error) {
+            android.util.Log.e("SceneConfigStore", "Database operation failed", error);
         }
         return list;
     }

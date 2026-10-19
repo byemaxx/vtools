@@ -27,6 +27,7 @@ assert accessibility.get(android + "canRequestFilterKeyEvents") == "false"
 assert "typeWindowContentChanged" not in accessibility.get(android + "accessibilityEventTypes")
 
 tests = [
+    ("app", "com.omarea.utils.MiniMonitorPosition", "MiniMonitorPositionTest"),
     ("app", "com.omarea.utils.AndroidPackageName", "AndroidPackageNameTest"),
     ("app", "com.omarea.scene_mode.TriggerExecutionPolicy", "TriggerExecutionPolicyTest"),
     ("app", "com.omarea.scene_mode.TaskExecutionPolicy", "TaskExecutionPolicyTest"),

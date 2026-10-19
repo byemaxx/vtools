@@ -11,6 +11,8 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import android.view.MotionEvent
+import android.view.ViewConfiguration
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -70,6 +72,7 @@ public class FloatMonitorMini(private val mContext: Context) {
             params.type = WindowCompatHelper.overlayWindowType()
         }
         params.format = PixelFormat.TRANSLUCENT
+        params.setTitle("Scene mini monitor")
 
         params.width = LayoutParams.WRAP_CONTENT
         params.height = LayoutParams.WRAP_CONTENT
@@ -79,22 +82,17 @@ public class FloatMonitorMini(private val mContext: Context) {
         params.y = monitorStorage.getInt("y", 0)
 
         @Suppress("DEPRECATION")
-        params.flags = LayoutParams.FLAG_NOT_TOUCH_MODAL or LayoutParams.FLAG_NOT_FOCUSABLE or LayoutParams.FLAG_NOT_TOUCHABLE or LayoutParams.FLAG_FULLSCREEN
+        params.flags = LayoutParams.FLAG_NOT_TOUCH_MODAL or LayoutParams.FLAG_NOT_FOCUSABLE or LayoutParams.FLAG_FULLSCREEN
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             params.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
 
-        val navHeight = 0
-        if (navHeight > 0) {
-            val p = WindowCompatHelper.getRealDisplaySize(mWindowManager!!)
-            params.y = -navHeight
-            params.x = 0
-        }
         try {
             mWindowManager!!.addView(view, params)
             mView = view
             show = true
+            installDragging(view, params, monitorStorage)
 
             startTimer()
             return true
@@ -102,6 +100,84 @@ public class FloatMonitorMini(private val mContext: Context) {
             Scene.toast("FloatMonitorMini Error\n" + ex.message)
             return false
         }
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun installDragging(view: View, params: LayoutParams, storage: android.content.SharedPreferences) {
+        val slop = ViewConfiguration.get(mContext).scaledTouchSlop
+        var downX = 0f
+        var downY = 0f
+        var startX = 0
+        var startY = 0
+        val downLocation = IntArray(2)
+        var active = false
+        var dragging = false
+
+        fun move(x: Int, y: Int, screenX: Int? = null, screenY: Int? = null) {
+            if (mView !== view || !show!! || !view.isAttachedToWindow || view.width == 0) return
+            val manager = mWindowManager ?: return
+            val size = WindowCompatHelper.getRealDisplaySize(manager)
+            val insets = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val raw = manager.currentWindowMetrics.windowInsets
+                androidx.core.view.WindowInsetsCompat.toWindowInsetsCompat(raw).getInsetsIgnoringVisibility(
+                    androidx.core.view.WindowInsetsCompat.Type.systemBars() or androidx.core.view.WindowInsetsCompat.Type.displayCutout())
+            } else {
+                view.rootWindowInsets?.let {
+                    androidx.core.view.WindowInsetsCompat.toWindowInsetsCompat(it).getInsetsIgnoringVisibility(
+                        androidx.core.view.WindowInsetsCompat.Type.systemBars() or androidx.core.view.WindowInsetsCompat.Type.displayCutout())
+                } ?: androidx.core.graphics.Insets.NONE
+            }
+            val location = IntArray(2)
+            view.getLocationOnScreen(location)
+            val proposedLeft = screenX ?: (location[0] + x - params.x)
+            val proposedTop = screenY ?: (location[1] + y - params.y)
+            val nextX = com.omarea.utils.MiniMonitorPosition.clampOffset(x, proposedLeft, view.width, insets.left, size.x - insets.right)
+            val nextY = com.omarea.utils.MiniMonitorPosition.clampOffset(y, proposedTop, view.height, insets.top, size.y - insets.bottom)
+            if (nextX != params.x || nextY != params.y) {
+                params.x = nextX
+                params.y = nextY
+                manager.updateViewLayout(view, params)
+            }
+        }
+        fun finish() {
+            if (dragging) storage.edit().putInt("x", params.x).putInt("y", params.y).apply()
+            active = false
+            dragging = false
+        }
+        view.setOnTouchListener { v, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downX = event.rawX
+                    downY = event.rawY
+                    startX = params.x
+                    startY = params.y
+                    view.getLocationOnScreen(downLocation)
+                    active = true
+                    dragging = false
+                }
+                MotionEvent.ACTION_MOVE -> if (active) {
+                    val dx = event.rawX - downX
+                    val dy = event.rawY - downY
+                    if (kotlin.math.abs(dx) > slop || kotlin.math.abs(dy) > slop) dragging = true
+                    if (dragging) move(startX + dx.toInt(), startY + dy.toInt(), downLocation[0] + dx.toInt(), downLocation[1] + dy.toInt())
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (active && !dragging) v.performClick()
+                    finish()
+                }
+                MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_POINTER_UP -> finish()
+            }
+            true
+        }
+        view.addOnLayoutChangeListener { _, _, _, right, bottom, _, _, oldRight, oldBottom ->
+            if (right != oldRight || bottom != oldBottom) view.post { move(params.x, params.y) }
+        }
+        view.setOnApplyWindowInsetsListener { _, insets ->
+            view.post { move(params.x, params.y) }
+            insets
+        }
+        view.post { move(params.x, params.y) }
+        view.requestApplyInsets()
     }
 
     private fun stopTimer() {
@@ -178,6 +254,7 @@ public class FloatMonitorMini(private val mContext: Context) {
         val batState = "$temperatureLabel ${BatteryPower.format(now, globalSPF)}"
 
         myHandler.post {
+            if (mView !== view || show != true) return@post
             cpuLoadTextView?.text = cpuLoad.toInt().toString() + "%"
             if (gpuLoad > -1) {
                 gpuLoadTextView?.text = gpuLoad.toString() + "%"

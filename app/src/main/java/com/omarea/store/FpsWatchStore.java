@@ -17,7 +17,7 @@ public class FpsWatchStore extends SQLiteOpenHelper {
     }
 
     @Override
-    public void onCreate(SQLiteDatabase db) {
+    public synchronized void onCreate(SQLiteDatabase db) {
         try {
             db.execSQL("create table session(" +
                     "id INTEGER primary key, " +
@@ -36,206 +36,163 @@ public class FpsWatchStore extends SQLiteOpenHelper {
                     "temperature REAL," +
                     "power_mode text" +
                     ")");
-        } catch (Exception ignored) {
+        } catch (Exception error) {
+            android.util.Log.e("FpsWatchStore", "Database operation failed", error);
         }
     }
 
     @Override
-    public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-    }
-
-    // 获取总充入电量
-    public int getSum() {
-        int total = 0;
-        try {
-            SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
-            final Cursor cursor = sqLiteDatabase.rawQuery("select sum(io) as total from charge_history", new String[]{});
-            while (cursor.moveToNext()) {
-                total = (int) (cursor.getLong(cursor.getColumnIndex("total")) / 3600);
-            }
-            cursor.close();
-            sqLiteDatabase.close();
-        } catch (Exception ignored) {
-
-        }
-        return total;
+    public synchronized void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
     }
 
     // 列举会话
-    public ArrayList<FpsWatchSession> sessions() {
+    public synchronized ArrayList<FpsWatchSession> sessions() {
         ArrayList<FpsWatchSession> histories = new ArrayList<>();
-        try {
-            SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
-            final Cursor cursor = sqLiteDatabase.rawQuery("select * from session", new String[]{});
+        try (SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
+             Cursor cursor = sqLiteDatabase.rawQuery("select * from session", new String[]{})) {
             while (cursor.moveToNext()) {
                 histories.add(new FpsWatchSession() {{
-                    sessionId = cursor.getLong(cursor.getColumnIndex("id"));
-                    packageName = cursor.getString(cursor.getColumnIndex("package_name"));
-                    beginTime = cursor.getLong(cursor.getColumnIndex("time_begin"));
+                    sessionId = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
+                    packageName = cursor.getString(cursor.getColumnIndexOrThrow("package_name"));
+                    beginTime = cursor.getLong(cursor.getColumnIndexOrThrow("time_begin"));
                 }});
             }
-            cursor.close();
-            sqLiteDatabase.close();
-        } catch (Exception ignored) {
-
+        } catch (Exception error) {
+            android.util.Log.e("FpsWatchStore", "Database operation failed", error);
         }
         return histories;
     }
 
     // 获取会话的详情（帧率）
-    public ArrayList<Float> sessionFpsData(long sessionId) {
+    public synchronized ArrayList<Float> sessionFpsData(long sessionId) {
         ArrayList<Float> histories = new ArrayList<>();
-        try {
-            SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
-            final Cursor cursor = sqLiteDatabase.rawQuery("select fps from fps_history where session = ?", new String[]{
+        try (SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
+             Cursor cursor = sqLiteDatabase.rawQuery("select fps from fps_history where session = ?", new String[]{
                     "" + sessionId
-            });
+            })) {
             while (cursor.moveToNext()) {
                 histories.add(cursor.getFloat(0));
             }
-            cursor.close();
-            sqLiteDatabase.close();
-        } catch (Exception ignored) {
-
+        } catch (Exception error) {
+            android.util.Log.e("FpsWatchStore", "Database operation failed", error);
         }
         return histories;
     }
 
     // 获取会话的详情（温度）
-    public ArrayList<Float> sessionTemperatureData(long sessionId) {
+    public synchronized ArrayList<Float> sessionTemperatureData(long sessionId) {
         ArrayList<Float> histories = new ArrayList<>();
-        try {
-            SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
-            final Cursor cursor = sqLiteDatabase.rawQuery("select temperature from fps_history where session = ?", new String[]{
+        try (SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
+             Cursor cursor = sqLiteDatabase.rawQuery("select temperature from fps_history where session = ?", new String[]{
                     "" + sessionId
-            });
+            })) {
             while (cursor.moveToNext()) {
                 histories.add(cursor.getFloat(0));
             }
-            cursor.close();
-            sqLiteDatabase.close();
-        } catch (Exception ignored) {
-
+        } catch (Exception error) {
+            android.util.Log.e("FpsWatchStore", "Database operation failed", error);
         }
         return histories;
     }
 
     // 获取会话的详情（CPU 负载）
-    public ArrayList<Float> sessionCpuLoadData(long sessionId) {
+    public synchronized ArrayList<Float> sessionCpuLoadData(long sessionId) {
         ArrayList<Float> histories = new ArrayList<>();
-        try {
-            SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
-            final Cursor cursor = sqLiteDatabase.rawQuery("select cpu_load from fps_history where session = ?", new String[]{
+        try (SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
+             Cursor cursor = sqLiteDatabase.rawQuery("select cpu_load from fps_history where session = ?", new String[]{
                     "" + sessionId
-            });
+            })) {
             while (cursor.moveToNext()) {
                 histories.add(cursor.getFloat(0));
             }
-            cursor.close();
-            sqLiteDatabase.close();
-        } catch (Exception ignored) {
-
+        } catch (Exception error) {
+            android.util.Log.e("FpsWatchStore", "Database operation failed", error);
         }
         return histories;
     }
 
     // 获取会话的详情（GPU 负载）
-    public ArrayList<Float> sessionGpuLoadData(long sessionId) {
+    public synchronized ArrayList<Float> sessionGpuLoadData(long sessionId) {
         ArrayList<Float> histories = new ArrayList<>();
-        try {
-            SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
-            final Cursor cursor = sqLiteDatabase.rawQuery("select gpu_load from fps_history where session = ?", new String[]{
+        try (SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
+             Cursor cursor = sqLiteDatabase.rawQuery("select gpu_load from fps_history where session = ?", new String[]{
                     "" + sessionId
-            });
+            })) {
             while (cursor.moveToNext()) {
                 histories.add(cursor.getFloat(0));
             }
-            cursor.close();
-            sqLiteDatabase.close();
-        } catch (Exception ignored) {
-
+        } catch (Exception error) {
+            android.util.Log.e("FpsWatchStore", "Database operation failed", error);
         }
         return histories;
     }
 
     // 获取会话的详情（电量）
-    public ArrayList<Float> sessionCapacityData(long sessionId) {
+    public synchronized ArrayList<Float> sessionCapacityData(long sessionId) {
         ArrayList<Float> histories = new ArrayList<>();
-        try {
-            SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
-            final Cursor cursor = sqLiteDatabase.rawQuery("select capacity from fps_history where session = ?", new String[]{
+        try (SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
+             Cursor cursor = sqLiteDatabase.rawQuery("select capacity from fps_history where session = ?", new String[]{
                     "" + sessionId
-            });
+            })) {
             while (cursor.moveToNext()) {
                 histories.add(cursor.getFloat(0));
             }
-            cursor.close();
-            sqLiteDatabase.close();
-        } catch (Exception ignored) {
-
+        } catch (Exception error) {
+            android.util.Log.e("FpsWatchStore", "Database operation failed", error);
         }
         return histories;
     }
 
     // 获取会话中的平静帧率
-    public float sessionAvgFps(long sessionId) {
+    public synchronized float sessionAvgFps(long sessionId) {
         float result = 0;
-        try {
-            SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
-            final Cursor cursor = sqLiteDatabase.rawQuery("select avg(fps) from fps_history where session = ?", new String[]{
+        try (SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
+             Cursor cursor = sqLiteDatabase.rawQuery("select avg(fps) from fps_history where session = ?", new String[]{
                     "" + sessionId
-            });
+            })) {
             while (cursor.moveToNext()) {
                 result = cursor.getFloat(0);
             }
-            cursor.close();
-            sqLiteDatabase.close();
-        } catch (Exception ignored) {
-
+        } catch (Exception error) {
+            android.util.Log.e("FpsWatchStore", "Database operation failed", error);
         }
         return result;
     }
 
     // 获取会话中的最低帧率
-    public float sessionMinFps(long sessionId) {
+    public synchronized float sessionMinFps(long sessionId) {
         float result = 0;
-        try {
-            SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
-            final Cursor cursor = sqLiteDatabase.rawQuery("select min(fps) from fps_history where session = ?", new String[]{
+        try (SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
+             Cursor cursor = sqLiteDatabase.rawQuery("select min(fps) from fps_history where session = ?", new String[]{
                     "" + sessionId
-            });
+            })) {
             while (cursor.moveToNext()) {
                 result = cursor.getFloat(0);
             }
-            cursor.close();
-            sqLiteDatabase.close();
-        } catch (Exception ignored) {
-
+        } catch (Exception error) {
+            android.util.Log.e("FpsWatchStore", "Database operation failed", error);
         }
         return result;
     }
 
     // 获取会话中的最高帧率
-    public float sessionMaxFps(long sessionId) {
+    public synchronized float sessionMaxFps(long sessionId) {
         float result = 0;
-        try {
-            SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
-            final Cursor cursor = sqLiteDatabase.rawQuery("select max(fps) from fps_history where session = ?", new String[]{
+        try (SQLiteDatabase sqLiteDatabase = this.getReadableDatabase();
+             Cursor cursor = sqLiteDatabase.rawQuery("select max(fps) from fps_history where session = ?", new String[]{
                     "" + sessionId
-            });
+            })) {
             while (cursor.moveToNext()) {
                 result = cursor.getFloat(0);
             }
-            cursor.close();
-            sqLiteDatabase.close();
-        } catch (Exception ignored) {
-
+        } catch (Exception error) {
+            android.util.Log.e("FpsWatchStore", "Database operation failed", error);
         }
         return result;
     }
 
     // 创建会话
-    public long createSession(String packageName) {
+    public synchronized long createSession(String packageName) {
         SQLiteDatabase database = getWritableDatabase();
         getWritableDatabase().beginTransaction();
         long time = System.currentTimeMillis();
@@ -255,7 +212,7 @@ public class FpsWatchStore extends SQLiteOpenHelper {
     }
 
     // 添加记录
-    public boolean addHistory(long session, float fps, double cpuLoad, double gpuLoad, int capacity, double temperature, String powerMode) {
+    public synchronized boolean addHistory(long session, float fps, double cpuLoad, double gpuLoad, int capacity, double temperature, String powerMode) {
         SQLiteDatabase database = getWritableDatabase();
         getWritableDatabase().beginTransaction();
         try {
@@ -272,38 +229,40 @@ public class FpsWatchStore extends SQLiteOpenHelper {
             database.setTransactionSuccessful();
             return true;
         } catch (Exception ex) {
+            android.util.Log.e("FpsWatchStore", "Database write failed", ex);
             return false;
         } finally {
             database.endTransaction();
         }
     }
 
-    // 清空全部数据
-    public boolean clearAll() {
-        try {
-            SQLiteDatabase database = getWritableDatabase();
-            database.execSQL("delete from session", new String[]{});
-            database.execSQL("delete from fps_history", new String[]{});
-            return true;
-        } catch (Exception ex) {
-            return false;
-        }
+    // Delete both tables atomically, preserving the database if either statement fails.
+    public synchronized boolean clearAll() {
+        return deleteHistory(null);
     }
 
-    // 删除会话记录
-    public boolean deleteSession(long sessionId) {
+    public synchronized boolean deleteSession(long sessionId) {
+        return deleteHistory(sessionId);
+    }
+
+    private boolean deleteHistory(Long sessionId) {
+        SQLiteDatabase database = getWritableDatabase();
+        database.beginTransaction();
         try {
-            SQLiteDatabase database = getWritableDatabase();
-            database.execSQL("delete from session where id = ?", new Object[]{
-                sessionId
-            });
-            database.execSQL("delete from fps_history where session = ?", new Object[]{
-                sessionId
-            });
+            if (sessionId == null) {
+                database.execSQL("delete from session");
+                database.execSQL("delete from fps_history");
+            } else {
+                database.execSQL("delete from session where id = ?", new Object[]{sessionId});
+                database.execSQL("delete from fps_history where session = ?", new Object[]{sessionId});
+            }
+            database.setTransactionSuccessful();
             return true;
-        } catch (Exception ex) {
+        } catch (Exception error) {
+            android.util.Log.e("FpsWatchStore", "Database delete failed", error);
             return false;
+        } finally {
+            database.endTransaction();
         }
     }
 }
-
