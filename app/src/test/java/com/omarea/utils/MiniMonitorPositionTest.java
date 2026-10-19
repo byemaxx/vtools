@@ -9,6 +9,9 @@ public class MiniMonitorPositionTest {
         // Landscape immersive mode: hidden status bar must allow the top edge.
         assert MiniMonitorPosition.clampOffset(-200, -40, 71, 0, 1440) == -160;
         assert MiniMonitorPosition.clampOffset(0, 0, 71, 0, 1440) == 0;
+        // After portrait -> landscape, an 822px bar can reach x=2346.
+        assert MiniMonitorPosition.clampOffset(1700, 2873, 822, 0, 3168) == 1173;
+        assert MiniMonitorPosition.clampOffset(1173, 2346, 822, 0, 3168) == 1173;
         assert MiniMonitorPosition.clampOffset(3100, 3100, 40, 160, 3104) == 3064;
         assert MiniMonitorPosition.clampOffset(0, -100, 1200, 0, 1000) == 100;
         assert MiniMonitorPosition.clampOffset(300, 500, 700, 20, 720) == -180;

@@ -116,7 +116,12 @@ public class FloatMonitorMini(private val mContext: Context) {
         fun move(x: Int, y: Int, screenX: Int? = null, screenY: Int? = null) {
             if (mView !== view || !show!! || !view.isAttachedToWindow || view.width == 0) return
             val manager = mWindowManager ?: return
-            val size = WindowCompatHelper.getRealDisplaySize(manager)
+            // Activity WindowMetrics can keep portrait bounds while this overlay is
+            // already landscape. Read the display attached to the overlay instead.
+            val display = view.display ?: return
+            val size = android.graphics.Point()
+            @Suppress("DEPRECATION")
+            display.getRealSize(size)
             // Use this overlay's live insets: the Activity context can retain portrait
             // metrics after a game rotates, and hidden system bars need no reserved space.
             val rawInsets = view.rootWindowInsets ?: if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
