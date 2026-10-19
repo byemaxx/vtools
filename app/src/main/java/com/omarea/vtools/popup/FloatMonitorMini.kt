@@ -117,16 +117,15 @@ public class FloatMonitorMini(private val mContext: Context) {
             if (mView !== view || !show!! || !view.isAttachedToWindow || view.width == 0) return
             val manager = mWindowManager ?: return
             val size = WindowCompatHelper.getRealDisplaySize(manager)
-            val insets = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                val raw = manager.currentWindowMetrics.windowInsets
-                androidx.core.view.WindowInsetsCompat.toWindowInsetsCompat(raw).getInsetsIgnoringVisibility(
+            // Use this overlay's live insets: the Activity context can retain portrait
+            // metrics after a game rotates, and hidden system bars need no reserved space.
+            val rawInsets = view.rootWindowInsets ?: if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                manager.currentWindowMetrics.windowInsets
+            } else null
+            val insets = rawInsets?.let {
+                androidx.core.view.WindowInsetsCompat.toWindowInsetsCompat(it).getInsets(
                     androidx.core.view.WindowInsetsCompat.Type.systemBars() or androidx.core.view.WindowInsetsCompat.Type.displayCutout())
-            } else {
-                view.rootWindowInsets?.let {
-                    androidx.core.view.WindowInsetsCompat.toWindowInsetsCompat(it).getInsetsIgnoringVisibility(
-                        androidx.core.view.WindowInsetsCompat.Type.systemBars() or androidx.core.view.WindowInsetsCompat.Type.displayCutout())
-                } ?: androidx.core.graphics.Insets.NONE
-            }
+            } ?: androidx.core.graphics.Insets.NONE
             val location = IntArray(2)
             view.getLocationOnScreen(location)
             val proposedLeft = screenX ?: (location[0] + x - params.x)
