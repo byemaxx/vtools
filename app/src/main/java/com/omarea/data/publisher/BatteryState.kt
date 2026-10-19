@@ -29,10 +29,14 @@ class BatteryState(private val applicationContext: Context) : BroadcastReceiver(
 
         val pendingResult = goAsync()
         try {
-            val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_UNKNOWN)
-            var capacity = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
-            val temp = intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1).toDouble() / 10.0f
-            val voltage = intent.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0) / 1000.0
+            // Power/boot/low-battery events need not contain a battery snapshot.
+            // Read the sticky snapshot instead of replacing valid readings with defaults.
+            val snapshot = if (action == Intent.ACTION_BATTERY_CHANGED) intent else
+                applicationContext.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: intent
+            val status = snapshot.getIntExtra(BatteryManager.EXTRA_STATUS, GlobalStatus.batteryStatus)
+            var capacity = snapshot.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+            val temp = snapshot.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)
+            val voltage = snapshot.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0) / 1000.0
             if (capacity == -1) {
                 if (batteryManager == null) {
                     batteryManager = context.applicationContext.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
@@ -41,10 +45,10 @@ class BatteryState(private val applicationContext: Context) : BroadcastReceiver(
             }
 
             GlobalStatus.batteryStatus = status
-            GlobalStatus.batteryCapacity = capacity
-            GlobalStatus.batteryVoltage = voltage
-            GlobalStatus.batteryCycleCount = intent.getIntExtra(BatteryManager.EXTRA_CYCLE_COUNT, GlobalStatus.batteryCycleCount)
-            GlobalStatus.setBatteryTemperature(temp)
+            if (capacity in 0..100) GlobalStatus.batteryCapacity = capacity
+            if (voltage > 0) GlobalStatus.batteryVoltage = voltage
+            GlobalStatus.batteryCycleCount = snapshot.getIntExtra(BatteryManager.EXTRA_CYCLE_COUNT, GlobalStatus.batteryCycleCount)
+            if (temp != Int.MIN_VALUE) GlobalStatus.setBatteryTemperature(temp / 10.0)
 
             // 判断是否在充电
             // val chargePlug = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1)
@@ -68,7 +72,7 @@ class BatteryState(private val applicationContext: Context) : BroadcastReceiver(
             } else if (action == Intent.ACTION_POWER_CONNECTED) {
                 EventBus.publish(EventType.POWER_CONNECTED)
             }
-            if (lastCapacity != capacity) {
+            if (capacity in 0..100 && lastCapacity != capacity) {
                 lastCapacity = capacity
                 EventBus.publish(EventType.BATTERY_CAPACITY_CHANGED)
             }
